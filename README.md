@@ -2,6 +2,9 @@
 
 Patch VS Code's Copilot Chat extension to use **MiniMax API** instead of Anthropic.
 
+<img width="1915" height="1010" alt="image" src="https://github.com/user-attachments/assets/0b187249-3e19-4277-9190-cc31aea2e747" />
+
+
 ## Why?
 
 VS Code Copilot Chat has a built-in "Anthropic" provider (BYOK), but it **hardcodes** `https://api.anthropic.com` with no way to change the base URL. [MiniMax](https://minimax.io) exposes an Anthropic-compatible API at `https://api.minimax.io/anthropic`, but VS Code won't let you point to it.
