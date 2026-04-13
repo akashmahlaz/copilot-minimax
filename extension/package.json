@@ -1,0 +1,156 @@
+{
+  "name": "copilot-gmail-connector",
+  "displayName": "Copilot Gmail Connector",
+  "description": "Gmail integration for GitHub Copilot Chat — browse, read, search, compose and manage emails from VS Code",
+  "version": "0.1.0",
+  "publisher": "copilot-minimax",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Chat"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.93.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Gmail Connector",
+      "properties": {
+        "gmailConnector.clientId": {
+          "type": "string",
+          "default": "",
+          "description": "Google OAuth2 Client ID (from Google Cloud Console)"
+        },
+        "gmailConnector.clientSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Google OAuth2 Client Secret"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gmail-connector",
+          "title": "Gmail",
+          "icon": "media/gmail-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "gmail-connector": [
+        {
+          "id": "gmail-inbox",
+          "name": "Inbox"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "gmail-inbox",
+        "contents": "Connect your Gmail account to browse, search and manage emails right from VS Code.\n[Connect Gmail](command:gmail-connector.connect)\n\nYou need a Google Cloud OAuth Client ID.\nSee [Setup Guide](command:gmail-connector.openSetup) for instructions."
+      }
+    ],
+    "commands": [
+      {
+        "command": "gmail-connector.connect",
+        "title": "Connect Gmail Account",
+        "category": "Gmail",
+        "icon": "$(mail)"
+      },
+      {
+        "command": "gmail-connector.disconnect",
+        "title": "Disconnect Gmail Account",
+        "category": "Gmail"
+      },
+      {
+        "command": "gmail-connector.refresh",
+        "title": "Refresh",
+        "category": "Gmail",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gmail-connector.compose",
+        "title": "Compose Email",
+        "category": "Gmail",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "gmail-connector.readEmail",
+        "title": "Read Email",
+        "category": "Gmail"
+      },
+      {
+        "command": "gmail-connector.openSetup",
+        "title": "Open Setup Guide",
+        "category": "Gmail"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "gmail-connector.refresh",
+          "when": "view == gmail-inbox",
+          "group": "navigation"
+        },
+        {
+          "command": "gmail-connector.compose",
+          "when": "view == gmail-inbox",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gmail-connector.readEmail",
+          "when": "view == gmail-inbox && viewItem == email",
+          "group": "inline"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "copilot-gmail-connector.gmail",
+        "name": "gmail",
+        "fullName": "Gmail Assistant",
+        "description": "Manage your Gmail — read, search, compose, reply, and organize emails",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "inbox",
+            "description": "Show recent inbox emails"
+          },
+          {
+            "name": "search",
+            "description": "Search emails by query"
+          },
+          {
+            "name": "read",
+            "description": "Read a specific email by ID or subject"
+          },
+          {
+            "name": "compose",
+            "description": "Compose a new email"
+          },
+          {
+            "name": "reply",
+            "description": "Reply to an email"
+          },
+          {
+            "name": "labels",
+            "description": "List your Gmail labels"
+          }
+        ]
+      }
+    ]
+  }
+}
