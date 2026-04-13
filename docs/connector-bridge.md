@@ -19,6 +19,8 @@ py -3 copilot_minimax.py patch --patch-file patches/connector.bridge.v2.json
 
 ```bash
 py -3 tools/mock_connector_server.py
+# or from repo root convenience wrapper
+py -3 mock_connector_server.py
 ```
 
 Server endpoint:
@@ -55,3 +57,4 @@ Contract definitions:
 
 - `connector.gmail.send_message` requires `approvalToken` in payload in mock mode.
 - Use `report` command to check patch markers and rule hit counts.
+- If server startup fails, verify your terminal cwd is the repository root.

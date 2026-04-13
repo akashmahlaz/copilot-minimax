@@ -82,6 +82,9 @@ python copilot_minimax.py patch --patch-file patches/connector.bridge.v1.json
 # Run local mock connector server for end-to-end testing
 py -3 tools/mock_connector_server.py
 
+# Or run from repo root with convenience wrapper
+py -3 mock_connector_server.py
+
 # Inspect extension.js for stable keyword anchors before writing patch rules
 python copilot_minimax.py inspect --keyword gmail --keyword tool --keyword command --limit 8
 
@@ -114,6 +117,37 @@ For a concrete, version-pinned hook pack built from real internals, see
 Use `patches/connector.bridge.v2.json` for the env-backed bridge URL fallback.
 
 Gmail tool contracts are defined in `connectors/contracts/gmail.tools.v1.json`.
+
+## Local Quickstart (End-to-End)
+
+1. Start mock connector server:
+
+```powershell
+py -3 mock_connector_server.py
+```
+
+2. In a second terminal, set bridge URL and open VS Code:
+
+```powershell
+$env:COPILOT_CONNECTOR_BRIDGE_URL = "http://127.0.0.1:8787/connector/tool"
+code .
+```
+
+3. Validate + apply bridge patch:
+
+```powershell
+py -3 copilot_minimax.py validate --patch-file patches/connector.bridge.v2.json
+py -3 copilot_minimax.py patch --patch-file patches/connector.bridge.v2.json
+```
+
+4. Confirm current hook status:
+
+```powershell
+py -3 copilot_minimax.py report --patch-file patches/connector.bridge.v2.json
+```
+
+If you previously ran `py -3 mock_connector_server.py` and saw an error, it was likely
+because the wrapper file did not exist yet or the terminal cwd was not the repo root.
 
 ### After patching
 
