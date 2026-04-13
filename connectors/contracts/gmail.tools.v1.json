@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "provider": "gmail",
+  "tools": [
+    {
+      "name": "connector.gmail.list_threads",
+      "description": "List recent Gmail threads with optional unread filter.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "unreadOnly": { "type": "boolean" }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "threads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "subject": { "type": "string" },
+                "from": { "type": "string" },
+                "snippet": { "type": "string" },
+                "isUnread": { "type": "boolean" }
+              },
+              "required": ["id", "subject", "from", "snippet", "isUnread"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["threads"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "connector.gmail.create_draft",
+      "description": "Create Gmail draft without sending.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["to", "subject", "body"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "draftId": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "required": ["draftId", "status"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "connector.gmail.send_message",
+      "description": "Send an email message. This should require explicit user approval in UI.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" },
+          "approvalToken": { "type": "string" }
+        },
+        "required": ["to", "subject", "body", "approvalToken"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "messageId": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "required": ["messageId", "status"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

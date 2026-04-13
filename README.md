@@ -10,11 +10,36 @@ Additionally, MiniMax does **not** implement the `/v1/models` endpoint that VS C
 
 This tool patches both issues automatically.
 
+It also supports applying additional custom replacements from a JSON patch file,
+so you can layer more Copilot extension modifications on top of the MiniMax patch.
+
 ## What it does
 
 1. **Redirects** all Anthropic API calls from `api.anthropic.com` → `api.minimax.io/anthropic`
 2. **Replaces** the model listing call with hardcoded MiniMax model metadata (M2.7, M2.7-highspeed, M2.5, M2.5-highspeed)
 3. **Creates a backup** so you can restore the original at any time
+
+## Project Structure
+
+The repository is now modular for easier maintenance and future connector work:
+
+- `copilot_minimax_core/cli.py` - argument parsing and command routing
+- `copilot_minimax_core/commands.py` - patch/status/restore command handlers
+- `copilot_minimax_core/patching.py` - built-in MiniMax patch logic
+- `copilot_minimax_core/custom_patches.py` - JSON-driven custom patch engine
+- `copilot_minimax_core/paths.py` - OS-specific VS Code path resolution
+- `copilot_minimax_core/settings_ops.py` - optional settings integration
+- `copilot_minimax.py` - compatibility wrapper (`python copilot_minimax.py ...` still works)
+- `patches/` - provider-specific patch pack templates (start with Gmail)
+
+For UX direction of future Gmail/Vercel/WhatsApp connector surfaces, see
+`docs/ui-ux-vision.md`.
+
+Visual screen-level wireframes are in `docs/ui-wireframes.md`.
+
+For phased delivery planning, see `docs/roadmap.md`.
+
+Connector runtime setup is documented in `docs/connector-bridge.md`.
 
 ## Install
 
@@ -36,9 +61,59 @@ python copilot_minimax.py patch
 # Apply and also configure Claude Code env vars with your API key
 python copilot_minimax.py patch --key YOUR_MINIMAX_API_KEY
 
+# Apply MiniMax patches + your custom patch pack
+python copilot_minimax.py patch --patch-file examples/custom_patch.example.json
+
+# Validate built-in + custom patch rules without writing changes
+python copilot_minimax.py validate --patch-file patches/gmail.connector.template.json
+
+# Validate concrete connector bridge rules (version-specific)
+python copilot_minimax.py validate --patch-file patches/connector.bridge.v1.json
+
+# Validate connector bridge v2 (env-backed endpoint fallback)
+python copilot_minimax.py validate --patch-file patches/connector.bridge.v2.json
+
+# Report current patch markers + custom patch match counts
+python copilot_minimax.py report --patch-file patches/gmail.connector.template.json
+
+# Apply connector bridge patch pack after validation
+python copilot_minimax.py patch --patch-file patches/connector.bridge.v1.json
+
+# Run local mock connector server for end-to-end testing
+py -3 tools/mock_connector_server.py
+
+# Inspect extension.js for stable keyword anchors before writing patch rules
+python copilot_minimax.py inspect --keyword gmail --keyword tool --keyword command --limit 8
+
 # Restore original (undo all patches)
 python copilot_minimax.py restore
 ```
+
+## Custom Patch Packs
+
+Use `--patch-file` to apply extra replacements to `extension.js` after the built-in
+MiniMax patch logic.
+
+Supported fields for each replacement item:
+
+- `name` (optional): label shown in output
+- `find` (required): literal string or regex pattern
+- `replace` (required): replacement text
+- `count` (optional): max replacements (default `0` = replace all)
+- `regex` (optional): `true` to use regex mode
+- `flags` (optional): regex flags string, any of `i`, `m`, `s`
+
+See `examples/custom_patch.example.json` for the exact format.
+
+For connector work, start from `patches/gmail.connector.template.json` and
+replace placeholder `find` patterns with real `extension.js` anchors.
+
+For a concrete, version-pinned hook pack built from real internals, see
+`patches/connector.bridge.v1.json`.
+
+Use `patches/connector.bridge.v2.json` for the env-backed bridge URL fallback.
+
+Gmail tool contracts are defined in `connectors/contracts/gmail.tools.v1.json`.
 
 ### After patching
 

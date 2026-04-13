@@ -1,0 +1,19 @@
+{
+  "replacements": [
+    {
+      "name": "example base-url patch",
+      "find": "https://example.old.service",
+      "replace": "https://example.new.service",
+      "count": 0,
+      "regex": false
+    },
+    {
+      "name": "example regex patch",
+      "find": "oldFunction\\((.*?)\\)",
+      "replace": "newFunction($1)",
+      "count": 0,
+      "regex": true,
+      "flags": "m"
+    }
+  ]
+}

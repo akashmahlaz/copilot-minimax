@@ -1,0 +1,25 @@
+{
+  "description": "Connector bridge v2. Adds env-backed endpoint fallback for connector.* tools.",
+  "replacements": [
+    {
+      "name": "tool metadata augmentation bridge flag",
+      "find": "function oLt\\(t,e,n,r,o\\)\\{let a=\\{\\};return o\\?\\.searchHint&&\\(a\\[\\\"anthropic/searchHint\\\"\\]=o\\.searchHint\\),o\\?\\.alwaysLoad&&\\(a\\[\\\"anthropic/alwaysLoad\\\"\\]=!0\\),\\{name:t,description:e,inputSchema:n,handler:r,annotations:o\\?\\.annotations,_meta:Object\\.keys\\(a\\)\\.length>0\\?a:void 0\\}\\}",
+      "replace": "function oLt(t,e,n,r,o){let a={};return o?.searchHint&&(a[\"anthropic/searchHint\"]=o.searchHint),o?.alwaysLoad&&(a[\"anthropic/alwaysLoad\"]=!0),{name:t,description:e,inputSchema:n,handler:r,annotations:o?.annotations,_meta:Object.keys(a).length>0?a:void 0,connectorBridgeEnabled:!!(globalThis.__COPILOT_CONNECTOR_BRIDGE_URL__||(typeof process!==\"undefined\"&&process?.env?.COPILOT_CONNECTOR_BRIDGE_URL))}}",
+      "count": 1,
+      "regex": true,
+      "required": true,
+      "minMatches": 1,
+      "maxMatches": 1
+    },
+    {
+      "name": "registerTool handler bridge wrapper v2",
+      "find": "e\\.registerTool\\(n\\.name,\\{description:n\\.description,inputSchema:n\\.inputSchema,annotations:n\\.annotations,_meta:n\\._meta\\},n\\.handler\\)",
+      "replace": "e.registerTool(n.name,{description:n.description,inputSchema:n.inputSchema,annotations:n.annotations,_meta:n._meta},async(...r)=>{let b=globalThis.__COPILOT_CONNECTOR_BRIDGE_URL__||(typeof process!==\"undefined\"?process?.env?.COPILOT_CONNECTOR_BRIDGE_URL:void 0);if(typeof n.name===\"string\"&&n.name.startsWith(\"connector.\")&&b){try{let o=await fetch(b,{method:\"POST\",headers:{\"content-type\":\"application/json\"},body:JSON.stringify({tool:n.name,args:r})});if(o.ok){let a=await o.json();if(a!==void 0)return a}}catch{}}return n.handler(...r)})",
+      "count": 1,
+      "regex": true,
+      "required": true,
+      "minMatches": 1,
+      "maxMatches": 1
+    }
+  ]
+}

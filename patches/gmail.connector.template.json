@@ -1,0 +1,34 @@
+{
+  "description": "Template for Gmail connector hook patches in Copilot extension.js",
+  "replacements": [
+    {
+      "name": "gmail hook placeholder: command registration",
+      "find": "REGISTER_COMMAND_PLACEHOLDER",
+      "replace": "REGISTER_COMMAND_PLACEHOLDER",
+      "count": 1,
+      "regex": false,
+      "required": true,
+      "minMatches": 1,
+      "maxMatches": 1
+    },
+    {
+      "name": "gmail hook placeholder: tool dispatch branch",
+      "find": "TOOL_DISPATCH_PLACEHOLDER",
+      "replace": "TOOL_DISPATCH_PLACEHOLDER",
+      "count": 1,
+      "regex": false,
+      "required": true,
+      "minMatches": 1,
+      "maxMatches": 1
+    },
+    {
+      "name": "gmail hook placeholder: backend base url",
+      "find": "https://connector.local/api",
+      "replace": "https://your-connector-service.example/api",
+      "count": 0,
+      "regex": false,
+      "required": false,
+      "minMatches": 0
+    }
+  ]
+}
