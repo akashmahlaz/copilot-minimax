@@ -38,9 +38,14 @@ const https = __importStar(require("https"));
 // ── Client ──────────────────────────────────────────────────
 class GmailClient {
     auth;
+    _tokenOverride;
     constructor(auth) {
         this.auth = auth;
     }
+    /** Set a per-request token override (for multi-account operations). */
+    useToken(token) { this._tokenOverride = token; }
+    /** Clear the token override back to default (active account). */
+    clearToken() { this._tokenOverride = undefined; }
     async listMessages(query, maxResults = 20) {
         const token = await this._requireToken();
         const params = new URLSearchParams({ maxResults: String(maxResults) });
@@ -103,6 +108,9 @@ class GmailClient {
     }
     // ── Internals ───────────────────────────────────────────
     async _requireToken() {
+        if (this._tokenOverride) {
+            return this._tokenOverride;
+        }
         const token = await this.auth.getAccessToken();
         if (!token) {
             throw new Error('Not authenticated — connect Gmail first.');

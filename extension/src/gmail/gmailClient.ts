@@ -25,7 +25,14 @@ export interface GmailLabel {
 // ── Client ──────────────────────────────────────────────────
 
 export class GmailClient {
+    private _tokenOverride?: string;
+
     constructor(private auth: GoogleAuthProvider) {}
+
+    /** Set a per-request token override (for multi-account operations). */
+    useToken(token: string): void { this._tokenOverride = token; }
+    /** Clear the token override back to default (active account). */
+    clearToken(): void { this._tokenOverride = undefined; }
 
     async listMessages(query?: string, maxResults = 20): Promise<EmailMessage[]> {
         const token = await this._requireToken();
@@ -98,6 +105,7 @@ export class GmailClient {
     // ── Internals ───────────────────────────────────────────
 
     private async _requireToken(): Promise<string> {
+        if (this._tokenOverride) { return this._tokenOverride; }
         const token = await this.auth.getAccessToken();
         if (!token) { throw new Error('Not authenticated — connect Gmail first.'); }
         return token;

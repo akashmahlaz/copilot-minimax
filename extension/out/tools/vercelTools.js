@@ -36,6 +36,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerVercelTools = registerVercelTools;
 const vscode = __importStar(require("vscode"));
 const https = __importStar(require("https"));
+const memoryStore_1 = require("../memory/memoryStore");
+const sessionStore_1 = require("../session/sessionStore");
 // ── Vercel API Client ───────────────────────────────────────
 function getVercelToken() {
     const config = vscode.workspace.getConfiguration('vercelConnector');
@@ -106,12 +108,20 @@ function vercelPost(path, token, body) {
     });
 }
 function textResult(text) {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart((0, memoryStore_1.memorySnapshot)() + text)]);
+}
+function logged(toolName, fn) {
+    return async (options, token) => {
+        const result = await fn(options, token);
+        const text = result.content[0]?.value || '';
+        (0, sessionStore_1.logToolCall)(toolName, options.input, text);
+        return result;
+    };
 }
 function registerVercelTools(context) {
     // ── List Projects ───────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('vercel_list_projects', {
-        async invoke(options, _token) {
+        invoke: logged('vercel_list_projects', async (options, _token) => {
             const token = getVercelToken();
             const limit = options.input?.limit || 10;
             const data = await vercelGet(`/v9/projects?limit=${limit}`, token);
@@ -121,11 +131,11 @@ function registerVercelTools(context) {
             }
             const lines = projects.map((p) => `- **${p.name}** | Framework: ${p.framework || 'N/A'} | Updated: ${new Date(p.updatedAt).toLocaleDateString()}`);
             return textResult(`Found ${projects.length} Vercel projects:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── List Deployments ────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('vercel_list_deployments', {
-        async invoke(options, _token) {
+        invoke: logged('vercel_list_deployments', async (options, _token) => {
             const token = getVercelToken();
             const { projectName, limit } = options.input || {};
             let path = `/v6/deployments?limit=${limit || 10}`;
@@ -143,11 +153,11 @@ function registerVercelTools(context) {
                 return `- **${d.name}** | State: ${state} | URL: ${url} | Created: ${new Date(d.created).toLocaleDateString()}`;
             });
             return textResult(`Found ${deps.length} deployments:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── Get Deployment Details ───────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('vercel_deployment_details', {
-        async invoke(options, _token) {
+        invoke: logged('vercel_deployment_details', async (options, _token) => {
             const token = getVercelToken();
             const { deploymentId } = options.input || {};
             if (!deploymentId) {
@@ -162,11 +172,11 @@ function registerVercelTools(context) {
                 `- **Target:** ${d.target || 'preview'}\n` +
                 `- **Git:** ${d.meta?.githubCommitMessage || 'N/A'}\n` +
                 `- **Branch:** ${d.meta?.githubCommitRef || 'N/A'}`);
-        }
+        })
     }));
     // ── List Domains ────────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('vercel_list_domains', {
-        async invoke(options, _token) {
+        invoke: logged('vercel_list_domains', async (options, _token) => {
             const token = getVercelToken();
             const limit = options.input?.limit || 20;
             const data = await vercelGet(`/v5/domains?limit=${limit}`, token);
@@ -176,11 +186,11 @@ function registerVercelTools(context) {
             }
             const lines = domains.map((d) => `- **${d.name}** | Verified: ${d.verified ? 'Yes' : 'No'} | Nameservers: ${(d.intendedNameservers || []).join(', ') || 'N/A'}`);
             return textResult(`Found ${domains.length} domains:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── List Environment Variables ───────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('vercel_list_env_vars', {
-        async invoke(options, _token) {
+        invoke: logged('vercel_list_env_vars', async (options, _token) => {
             const token = getVercelToken();
             const { projectName } = options.input || {};
             if (!projectName) {
@@ -193,7 +203,7 @@ function registerVercelTools(context) {
             }
             const lines = envs.map((e) => `- \`${e.key}\` | Target: ${(e.target || []).join(', ')} | Type: ${e.type}`);
             return textResult(`Env vars for **${projectName}**:\n\n${lines.join('\n')}\n\n(Values are hidden for security)`);
-        }
+        })
     }));
 }
 //# sourceMappingURL=vercelTools.js.map

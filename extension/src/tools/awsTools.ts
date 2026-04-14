@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as https from 'https';
 import * as crypto from 'crypto';
+import { memorySnapshot } from '../memory/memoryStore';
+import { logToolCall } from '../session/sessionStore';
 
 // ── AWS Signature V4 (pure Node, no SDK) ────────────────────
 
@@ -162,7 +164,16 @@ function parseXmlTag(xml: string, tag: string): string[] {
 // ── Tool helpers ─────────────────────────────────────────────
 
 function textResult(text: string): vscode.LanguageModelToolResult {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(memorySnapshot() + text)]);
+}
+
+function logged<T>(toolName: string, fn: (options: vscode.LanguageModelToolInvocationOptions<T>, token: vscode.CancellationToken) => Promise<vscode.LanguageModelToolResult>) {
+    return async (options: vscode.LanguageModelToolInvocationOptions<T>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> => {
+        const result = await fn(options, token);
+        const text = (result.content[0] as any)?.value || '';
+        logToolCall(toolName, options.input as any, text);
+        return result;
+    };
 }
 
 export function registerAwsTools(context: vscode.ExtensionContext): void {
@@ -171,7 +182,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_s3_list_buckets', {
-            async invoke(_options, _token) {
+            invoke: logged('aws_s3_list_buckets', async (_options, _token) => {
                 const creds = getAwsCreds();
                 const xml = await s3Request('GET', '/', '', creds);
                 const buckets = parseXmlTag(xml, 'Name');
@@ -179,15 +190,15 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 if (!buckets.length) { return textResult('No S3 buckets found.'); }
                 const lines = buckets.map((b, i) => `- **${b}** (created: ${dates[i] || 'unknown'})`);
                 return textResult(`Found ${buckets.length} S3 buckets:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
-    // ── S3: List Objects ─────────────────────────────────────
+    // ── S3: List Objects ───────────────────────────────────
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_s3_list_objects', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ bucket: string; prefix?: string; maxKeys?: number }>, _token) {
+            invoke: logged('aws_s3_list_objects', async (options: vscode.LanguageModelToolInvocationOptions<{ bucket: string; prefix?: string; maxKeys?: number }>, _token) => {
                 const creds = getAwsCreds();
                 const { bucket, prefix, maxKeys } = options.input || {} as any;
                 if (!bucket) { return textResult('Please provide a bucket name.'); }
@@ -202,22 +213,22 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                     return `- \`${k}\`${size}`;
                 });
                 return textResult(`Objects in **s3://${bucket}/${prefix || ''}**:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
-    // ── S3: Get Object ───────────────────────────────────────
+    // ── S3: Get Object ─────────────────────────────────────
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_s3_get_object', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ bucket: string; key: string }>, _token) {
+            invoke: logged('aws_s3_get_object', async (options: vscode.LanguageModelToolInvocationOptions<{ bucket: string; key: string }>, _token) => {
                 const creds = getAwsCreds();
                 const { bucket, key } = options.input || {} as any;
                 if (!bucket || !key) { return textResult('Provide bucket and key.'); }
                 const data = await s3Request('GET', `/${bucket}/${encodeURIComponent(key)}`, '', creds);
                 const preview = typeof data === 'string' ? data.substring(0, 3000) : JSON.stringify(data).substring(0, 3000);
                 return textResult(`**s3://${bucket}/${key}** content:\n\n\`\`\`\n${preview}\n\`\`\``);
-            }
+            })
         })
     );
 
@@ -225,7 +236,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_lambda_list_functions', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ maxItems?: number }>, _token) {
+            invoke: logged('aws_lambda_list_functions', async (options: vscode.LanguageModelToolInvocationOptions<{ maxItems?: number }>, _token) => {
                 const creds = getAwsCreds();
                 const max = options.input?.maxItems || 20;
                 const url = `https://lambda.${creds.region}.amazonaws.com/2015-03-31/functions?MaxItems=${max}`;
@@ -234,7 +245,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 if (!fns.length) { return textResult('No Lambda functions found.'); }
                 const lines = fns.map((f: any) => `- **${f.FunctionName}** | Runtime: ${f.Runtime || 'N/A'} | Memory: ${f.MemorySize}MB | Timeout: ${f.Timeout}s`);
                 return textResult(`Found ${fns.length} Lambda functions:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -242,7 +253,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_lambda_invoke', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ functionName: string; payload?: string }>, _token) {
+            invoke: logged('aws_lambda_invoke', async (options: vscode.LanguageModelToolInvocationOptions<{ functionName: string; payload?: string }>, _token) => {
                 const creds = getAwsCreds();
                 const { functionName, payload } = options.input || {} as any;
                 if (!functionName) { return textResult('Provide functionName.'); }
@@ -251,7 +262,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 const data = await awsRequest('POST', url, body, 'lambda', creds);
                 const result = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
                 return textResult(`**Lambda ${functionName}** invocation result:\n\n\`\`\`json\n${result.substring(0, 3000)}\n\`\`\``);
-            }
+            })
         })
     );
 
@@ -259,7 +270,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_ec2_list_instances', {
-            async invoke(_options, _token) {
+            invoke: logged('aws_ec2_list_instances', async (_options, _token) => {
                 const creds = getAwsCreds();
                 const url = `https://ec2.${creds.region}.amazonaws.com/?Action=DescribeInstances&Version=2016-11-15`;
                 const data = await awsRequest('GET', url, '', 'ec2', creds);
@@ -270,7 +281,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 if (!ids.length) { return textResult('No EC2 instances found.'); }
                 const lines = ids.map((id, i) => `- **${id}** | Type: ${types[i] || '?'} | State: ${states[i] || '?'}`);
                 return textResult(`Found ${ids.length} EC2 instances:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -278,7 +289,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_ec2_manage_instance', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ instanceId: string; action: 'start' | 'stop' | 'reboot' }>, _token) {
+            invoke: logged('aws_ec2_manage_instance', async (options: vscode.LanguageModelToolInvocationOptions<{ instanceId: string; action: 'start' | 'stop' | 'reboot' }>, _token) => {
                 const creds = getAwsCreds();
                 const { instanceId, action } = options.input || {} as any;
                 if (!instanceId || !action) { return textResult('Provide instanceId and action (start/stop/reboot).'); }
@@ -288,7 +299,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 const url = `https://ec2.${creds.region}.amazonaws.com/?Action=${apiAction}&InstanceId.1=${instanceId}&Version=2016-11-15`;
                 await awsRequest('GET', url, '', 'ec2', creds);
                 return textResult(`EC2 instance **${instanceId}** — **${action}** command sent successfully.`);
-            }
+            })
         })
     );
 
@@ -296,7 +307,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_cloudwatch_log_groups', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ prefix?: string; limit?: number }>, _token) {
+            invoke: logged('aws_cloudwatch_log_groups', async (options: vscode.LanguageModelToolInvocationOptions<{ prefix?: string; limit?: number }>, _token) => {
                 const creds = getAwsCreds();
                 const body: any = { limit: options.input?.limit || 20 };
                 if (options.input?.prefix) { body.logGroupNamePrefix = options.input.prefix; }
@@ -306,7 +317,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 if (!groups.length) { return textResult('No CloudWatch log groups found.'); }
                 const lines = groups.map((g: any) => `- **${g.logGroupName}** | Stored: ${formatBytes(g.storedBytes || 0)} | Retention: ${g.retentionInDays || '∞'} days`);
                 return textResult(`Found ${groups.length} log groups:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -314,7 +325,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('aws_cloudwatch_get_logs', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ logGroupName: string; logStreamName?: string; limit?: number }>, _token) {
+            invoke: logged('aws_cloudwatch_get_logs', async (options: vscode.LanguageModelToolInvocationOptions<{ logGroupName: string; logStreamName?: string; limit?: number }>, _token) => {
                 const creds = getAwsCreds();
                 const { logGroupName, logStreamName, limit } = options.input || {} as any;
                 if (!logGroupName) { return textResult('Provide logGroupName.'); }
@@ -336,7 +347,7 @@ export function registerAwsTools(context: vscode.ExtensionContext): void {
                 const events = await awsRequest('POST', url, evtBody, 'logs', creds, { 'x-amz-target': 'Logs_20140328.GetLogEvents' });
                 const lines = (events.events || []).map((e: any) => `[${new Date(e.timestamp).toISOString()}] ${e.message}`);
                 return textResult(`**${logGroupName}** / ${logStreamName} — ${lines.length} events:\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``);
-            }
+            })
         })
     );
 }

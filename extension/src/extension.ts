@@ -6,6 +6,8 @@ import { registerGmailParticipant } from './chat/gmailParticipant';
 import { registerGmailTools } from './tools/gmailTools';
 import { registerAwsTools } from './tools/awsTools';
 import { registerVercelTools } from './tools/vercelTools';
+import { registerMemoryTools } from './tools/memoryTools';
+import { registerSessionTools } from './tools/sessionTools';
 
 let gmailClient: GmailClient | undefined;
 
@@ -121,6 +123,100 @@ export function activate(context: vscode.ExtensionContext): void {
     registerGmailTools(context, gmailClient, authProvider);
     registerAwsTools(context);
     registerVercelTools(context);
+    registerMemoryTools(context);
+    registerSessionTools(context);
+
+    // ── Status Bar: Active Gmail Account ────────────────────
+
+    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+    statusBar.command = 'gmail-connector.quickSwitch';
+    context.subscriptions.push(statusBar);
+
+    function updateStatusBar(): void {
+        const accounts = authProvider.listAccounts();
+        const active = accounts.find(a => a.active);
+        if (active) {
+            statusBar.text = `$(mail) ${active.label}`;
+            statusBar.tooltip = `Gmail: ${active.email}\n${accounts.length} account(s) connected — click to switch`;
+        } else {
+            statusBar.text = '$(mail) No Gmail';
+            statusBar.tooltip = 'Click to connect a Gmail account';
+        }
+        statusBar.show();
+    }
+
+    updateStatusBar();
+
+    // Refresh status bar command (called by tools after switching)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gmail-connector.refreshStatusBar', () => {
+            updateStatusBar();
+        })
+    );
+
+    // Quick-pick account switcher
+    context.subscriptions.push(
+        vscode.commands.registerCommand('gmail-connector.quickSwitch', async () => {
+            const accounts = authProvider.listAccounts();
+
+            interface AccountItem extends vscode.QuickPickItem { accountLabel?: string; action?: string; }
+            const items: AccountItem[] = accounts.map(a => ({
+                label: `${a.active ? '$(check) ' : '     '}${a.label}`,
+                description: a.email,
+                detail: a.active ? 'Currently active' : undefined,
+                accountLabel: a.label,
+            }));
+            items.push({ label: '$(add) Add new account...', description: '', action: 'add' });
+            if (accounts.length > 0) {
+                items.push({ label: '$(trash) Remove an account...', description: '', action: 'remove' });
+            }
+
+            const pick = await vscode.window.showQuickPick(items, {
+                placeHolder: accounts.length > 0 ? 'Switch Gmail account' : 'No accounts — add one',
+                title: 'Gmail Accounts',
+            }) as AccountItem | undefined;
+
+            if (!pick) { return; }
+
+            if (pick.action === 'add') {
+                vscode.commands.executeCommand('gmail-connector.connect');
+                return;
+            }
+
+            if (pick.action === 'remove') {
+                const removeItems = accounts.map(a => ({
+                    label: a.label,
+                    description: a.email,
+                    detail: a.active ? 'Active account' : undefined,
+                }));
+                const removePick = await vscode.window.showQuickPick(removeItems, {
+                    placeHolder: 'Select account to remove',
+                    title: 'Remove Gmail Account',
+                });
+                if (removePick) {
+                    const confirm = await vscode.window.showWarningMessage(
+                        `Remove Gmail account "${removePick.label}" (${removePick.description})?`,
+                        { modal: true },
+                        'Remove'
+                    );
+                    if (confirm === 'Remove') {
+                        authProvider.removeAccountByLabel(removePick.label);
+                        updateStatusBar();
+                        vscode.window.showInformationMessage(`Gmail account "${removePick.label}" removed.`);
+                    }
+                }
+                return;
+            }
+
+            if (pick.accountLabel) {
+                const switched = authProvider.switchAccount(pick.accountLabel);
+                if (switched) {
+                    updateStatusBar();
+                    vscode.window.showInformationMessage(`Gmail: switched to ${switched.label} (${switched.email})`);
+                }
+            }
+        })
+    );
 }
 
 export function deactivate(): void {

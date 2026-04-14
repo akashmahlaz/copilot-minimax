@@ -1,1 +1,1 @@
-{"version":3,"file":"vercelTools.d.ts","sourceRoot":"","sources":["../../src/tools/vercelTools.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,MAAM,QAAQ,CAAC;AAkEjC,wBAAgB,mBAAmB,CAAC,OAAO,EAAE,MAAM,CAAC,gBAAgB,GAAG,IAAI,CAqG1E"}
+{"version":3,"file":"vercelTools.d.ts","sourceRoot":"","sources":["../../src/tools/vercelTools.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,MAAM,QAAQ,CAAC;AA6EjC,wBAAgB,mBAAmB,CAAC,OAAO,EAAE,MAAM,CAAC,gBAAgB,GAAG,IAAI,CAqG1E"}

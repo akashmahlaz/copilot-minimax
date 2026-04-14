@@ -37,6 +37,8 @@ exports.registerAwsTools = registerAwsTools;
 const vscode = __importStar(require("vscode"));
 const https = __importStar(require("https"));
 const crypto = __importStar(require("crypto"));
+const memoryStore_1 = require("../memory/memoryStore");
+const sessionStore_1 = require("../session/sessionStore");
 function getAwsCreds() {
     const config = vscode.workspace.getConfiguration('awsConnector');
     const accessKeyId = config.get('accessKeyId') || '';
@@ -177,12 +179,20 @@ function parseXmlTag(xml, tag) {
 }
 // ── Tool helpers ─────────────────────────────────────────────
 function textResult(text) {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart((0, memoryStore_1.memorySnapshot)() + text)]);
+}
+function logged(toolName, fn) {
+    return async (options, token) => {
+        const result = await fn(options, token);
+        const text = result.content[0]?.value || '';
+        (0, sessionStore_1.logToolCall)(toolName, options.input, text);
+        return result;
+    };
 }
 function registerAwsTools(context) {
     // ── S3: List Buckets ─────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_s3_list_buckets', {
-        async invoke(_options, _token) {
+        invoke: logged('aws_s3_list_buckets', async (_options, _token) => {
             const creds = getAwsCreds();
             const xml = await s3Request('GET', '/', '', creds);
             const buckets = parseXmlTag(xml, 'Name');
@@ -192,11 +202,11 @@ function registerAwsTools(context) {
             }
             const lines = buckets.map((b, i) => `- **${b}** (created: ${dates[i] || 'unknown'})`);
             return textResult(`Found ${buckets.length} S3 buckets:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
-    // ── S3: List Objects ─────────────────────────────────────
+    // ── S3: List Objects ───────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_s3_list_objects', {
-        async invoke(options, _token) {
+        invoke: logged('aws_s3_list_objects', async (options, _token) => {
             const creds = getAwsCreds();
             const { bucket, prefix, maxKeys } = options.input || {};
             if (!bucket) {
@@ -217,11 +227,11 @@ function registerAwsTools(context) {
                 return `- \`${k}\`${size}`;
             });
             return textResult(`Objects in **s3://${bucket}/${prefix || ''}**:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
-    // ── S3: Get Object ───────────────────────────────────────
+    // ── S3: Get Object ─────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_s3_get_object', {
-        async invoke(options, _token) {
+        invoke: logged('aws_s3_get_object', async (options, _token) => {
             const creds = getAwsCreds();
             const { bucket, key } = options.input || {};
             if (!bucket || !key) {
@@ -230,11 +240,11 @@ function registerAwsTools(context) {
             const data = await s3Request('GET', `/${bucket}/${encodeURIComponent(key)}`, '', creds);
             const preview = typeof data === 'string' ? data.substring(0, 3000) : JSON.stringify(data).substring(0, 3000);
             return textResult(`**s3://${bucket}/${key}** content:\n\n\`\`\`\n${preview}\n\`\`\``);
-        }
+        })
     }));
     // ── Lambda: List Functions ────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_lambda_list_functions', {
-        async invoke(options, _token) {
+        invoke: logged('aws_lambda_list_functions', async (options, _token) => {
             const creds = getAwsCreds();
             const max = options.input?.maxItems || 20;
             const url = `https://lambda.${creds.region}.amazonaws.com/2015-03-31/functions?MaxItems=${max}`;
@@ -245,11 +255,11 @@ function registerAwsTools(context) {
             }
             const lines = fns.map((f) => `- **${f.FunctionName}** | Runtime: ${f.Runtime || 'N/A'} | Memory: ${f.MemorySize}MB | Timeout: ${f.Timeout}s`);
             return textResult(`Found ${fns.length} Lambda functions:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── Lambda: Invoke Function ──────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_lambda_invoke', {
-        async invoke(options, _token) {
+        invoke: logged('aws_lambda_invoke', async (options, _token) => {
             const creds = getAwsCreds();
             const { functionName, payload } = options.input || {};
             if (!functionName) {
@@ -260,11 +270,11 @@ function registerAwsTools(context) {
             const data = await awsRequest('POST', url, body, 'lambda', creds);
             const result = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
             return textResult(`**Lambda ${functionName}** invocation result:\n\n\`\`\`json\n${result.substring(0, 3000)}\n\`\`\``);
-        }
+        })
     }));
     // ── EC2: List Instances ──────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_ec2_list_instances', {
-        async invoke(_options, _token) {
+        invoke: logged('aws_ec2_list_instances', async (_options, _token) => {
             const creds = getAwsCreds();
             const url = `https://ec2.${creds.region}.amazonaws.com/?Action=DescribeInstances&Version=2016-11-15`;
             const data = await awsRequest('GET', url, '', 'ec2', creds);
@@ -277,11 +287,11 @@ function registerAwsTools(context) {
             }
             const lines = ids.map((id, i) => `- **${id}** | Type: ${types[i] || '?'} | State: ${states[i] || '?'}`);
             return textResult(`Found ${ids.length} EC2 instances:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── EC2: Start/Stop Instance ─────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_ec2_manage_instance', {
-        async invoke(options, _token) {
+        invoke: logged('aws_ec2_manage_instance', async (options, _token) => {
             const creds = getAwsCreds();
             const { instanceId, action } = options.input || {};
             if (!instanceId || !action) {
@@ -295,11 +305,11 @@ function registerAwsTools(context) {
             const url = `https://ec2.${creds.region}.amazonaws.com/?Action=${apiAction}&InstanceId.1=${instanceId}&Version=2016-11-15`;
             await awsRequest('GET', url, '', 'ec2', creds);
             return textResult(`EC2 instance **${instanceId}** — **${action}** command sent successfully.`);
-        }
+        })
     }));
     // ── CloudWatch: Get Log Groups ───────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_cloudwatch_log_groups', {
-        async invoke(options, _token) {
+        invoke: logged('aws_cloudwatch_log_groups', async (options, _token) => {
             const creds = getAwsCreds();
             const body = { limit: options.input?.limit || 20 };
             if (options.input?.prefix) {
@@ -313,11 +323,11 @@ function registerAwsTools(context) {
             }
             const lines = groups.map((g) => `- **${g.logGroupName}** | Stored: ${formatBytes(g.storedBytes || 0)} | Retention: ${g.retentionInDays || '∞'} days`);
             return textResult(`Found ${groups.length} log groups:\n\n${lines.join('\n')}`);
-        }
+        })
     }));
     // ── CloudWatch: Get Recent Logs ──────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('aws_cloudwatch_get_logs', {
-        async invoke(options, _token) {
+        invoke: logged('aws_cloudwatch_get_logs', async (options, _token) => {
             const creds = getAwsCreds();
             const { logGroupName, logStreamName, limit } = options.input || {};
             if (!logGroupName) {
@@ -341,7 +351,7 @@ function registerAwsTools(context) {
             const events = await awsRequest('POST', url, evtBody, 'logs', creds, { 'x-amz-target': 'Logs_20140328.GetLogEvents' });
             const lines = (events.events || []).map((e) => `[${new Date(e.timestamp).toISOString()}] ${e.message}`);
             return textResult(`**${logGroupName}** / ${logStreamName} — ${lines.length} events:\n\n\`\`\`\n${lines.join('\n')}\n\`\`\``);
-        }
+        })
     }));
 }
 function formatBytes(bytes) {

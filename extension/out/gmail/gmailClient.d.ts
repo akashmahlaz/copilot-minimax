@@ -18,7 +18,12 @@ export interface GmailLabel {
 }
 export declare class GmailClient {
     private auth;
+    private _tokenOverride?;
     constructor(auth: GoogleAuthProvider);
+    /** Set a per-request token override (for multi-account operations). */
+    useToken(token: string): void;
+    /** Clear the token override back to default (active account). */
+    clearToken(): void;
     listMessages(query?: string, maxResults?: number): Promise<EmailMessage[]>;
     getMessage(id: string): Promise<EmailMessage>;
     sendEmail(to: string, subject: string, body: string): Promise<void>;

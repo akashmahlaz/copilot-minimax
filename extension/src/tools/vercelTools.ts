@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as https from 'https';
+import { memorySnapshot } from '../memory/memoryStore';
+import { logToolCall } from '../session/sessionStore';
 
 // ── Vercel API Client ───────────────────────────────────────
 
@@ -61,7 +63,16 @@ function vercelPost(path: string, token: string, body: object): Promise<any> {
 }
 
 function textResult(text: string): vscode.LanguageModelToolResult {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(memorySnapshot() + text)]);
+}
+
+function logged<T>(toolName: string, fn: (options: vscode.LanguageModelToolInvocationOptions<T>, token: vscode.CancellationToken) => Promise<vscode.LanguageModelToolResult>) {
+    return async (options: vscode.LanguageModelToolInvocationOptions<T>, token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> => {
+        const result = await fn(options, token);
+        const text = (result.content[0] as any)?.value || '';
+        logToolCall(toolName, options.input as any, text);
+        return result;
+    };
 }
 
 export function registerVercelTools(context: vscode.ExtensionContext): void {
@@ -70,7 +81,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('vercel_list_projects', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ limit?: number }>, _token) {
+            invoke: logged('vercel_list_projects', async (options: vscode.LanguageModelToolInvocationOptions<{ limit?: number }>, _token) => {
                 const token = getVercelToken();
                 const limit = options.input?.limit || 10;
                 const data = await vercelGet(`/v9/projects?limit=${limit}`, token);
@@ -80,7 +91,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
                     `- **${p.name}** | Framework: ${p.framework || 'N/A'} | Updated: ${new Date(p.updatedAt).toLocaleDateString()}`
                 );
                 return textResult(`Found ${projects.length} Vercel projects:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -88,7 +99,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('vercel_list_deployments', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ projectName?: string; limit?: number }>, _token) {
+            invoke: logged('vercel_list_deployments', async (options: vscode.LanguageModelToolInvocationOptions<{ projectName?: string; limit?: number }>, _token) => {
                 const token = getVercelToken();
                 const { projectName, limit } = options.input || {} as any;
                 let path = `/v6/deployments?limit=${limit || 10}`;
@@ -102,7 +113,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
                     return `- **${d.name}** | State: ${state} | URL: ${url} | Created: ${new Date(d.created).toLocaleDateString()}`;
                 });
                 return textResult(`Found ${deps.length} deployments:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -110,7 +121,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('vercel_deployment_details', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ deploymentId: string }>, _token) {
+            invoke: logged('vercel_deployment_details', async (options: vscode.LanguageModelToolInvocationOptions<{ deploymentId: string }>, _token) => {
                 const token = getVercelToken();
                 const { deploymentId } = options.input || {} as any;
                 if (!deploymentId) { return textResult('Provide deploymentId.'); }
@@ -125,7 +136,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
                     `- **Git:** ${d.meta?.githubCommitMessage || 'N/A'}\n` +
                     `- **Branch:** ${d.meta?.githubCommitRef || 'N/A'}`
                 );
-            }
+            })
         })
     );
 
@@ -133,7 +144,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('vercel_list_domains', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ limit?: number }>, _token) {
+            invoke: logged('vercel_list_domains', async (options: vscode.LanguageModelToolInvocationOptions<{ limit?: number }>, _token) => {
                 const token = getVercelToken();
                 const limit = options.input?.limit || 20;
                 const data = await vercelGet(`/v5/domains?limit=${limit}`, token);
@@ -143,7 +154,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
                     `- **${d.name}** | Verified: ${d.verified ? 'Yes' : 'No'} | Nameservers: ${(d.intendedNameservers || []).join(', ') || 'N/A'}`
                 );
                 return textResult(`Found ${domains.length} domains:\n\n${lines.join('\n')}`);
-            }
+            })
         })
     );
 
@@ -151,7 +162,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('vercel_list_env_vars', {
-            async invoke(options: vscode.LanguageModelToolInvocationOptions<{ projectName: string }>, _token) {
+            invoke: logged('vercel_list_env_vars', async (options: vscode.LanguageModelToolInvocationOptions<{ projectName: string }>, _token) => {
                 const token = getVercelToken();
                 const { projectName } = options.input || {} as any;
                 if (!projectName) { return textResult('Provide projectName.'); }
@@ -162,7 +173,7 @@ export function registerVercelTools(context: vscode.ExtensionContext): void {
                     `- \`${e.key}\` | Target: ${(e.target || []).join(', ')} | Type: ${e.type}`
                 );
                 return textResult(`Env vars for **${projectName}**:\n\n${lines.join('\n')}\n\n(Values are hidden for security)`);
-            }
+            })
         })
     );
 }

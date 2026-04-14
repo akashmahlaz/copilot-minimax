@@ -19,12 +19,15 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "@types/vscode": "^1.93.0",
     "@types/node": "^20.0.0",
-    "typescript": "^5.5.0"
+    "@types/vscode": "^1.93.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.4"
   },
   "contributes": {
     "configuration": {
@@ -184,13 +187,18 @@
         "icon": "$(add)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Add a new Gmail account",
-        "modelDescription": "Add a new Gmail account with a label (e.g. 'personal', 'work', 'client'). Opens browser for Google OAuth. After adding, this becomes the active account. The user can have multiple Gmail accounts and switch between them. Always ask the user what label they want for the account.",
+        "modelDescription": "Add a new Gmail account with a label (e.g. 'personal', 'work', 'client'). Opens browser for Google OAuth. After adding, this becomes the active account. Accounts persist GLOBALLY on disk — they work in all VS Code windows. Always ask the user for a label. Before adding, call gmail_list_accounts to check if the account already exists from another window.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "label": { "type": "string", "description": "Label for this account (e.g. 'personal', 'work', 'client', 'company-name')" }
+            "label": {
+              "type": "string",
+              "description": "Label for this account (e.g. 'personal', 'work', 'client', 'company-name')"
+            }
           },
-          "required": ["label"]
+          "required": [
+            "label"
+          ]
         }
       },
       {
@@ -200,7 +208,7 @@
         "icon": "$(accounts-view-bar-icon)",
         "canBeReferencedInPrompt": true,
         "userDescription": "List all connected Gmail accounts",
-        "modelDescription": "Lists all connected Gmail accounts with their labels, email addresses, and which one is active. Use when the user asks which accounts are connected or before switching accounts.",
+        "modelDescription": "Lists all connected Gmail accounts with labels, emails, and which is active. Accounts persist GLOBALLY across all VS Code windows (stored on disk). IMPORTANT: Always call this tool BEFORE telling a user an account isn't connected — accounts may exist from other windows or sessions.",
         "inputSchema": {
           "type": "object",
           "properties": {}
@@ -217,9 +225,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "label": { "type": "string", "description": "Account label to switch to (e.g. 'personal', 'work')" }
+            "label": {
+              "type": "string",
+              "description": "Account label to switch to (e.g. 'personal', 'work')"
+            }
           },
-          "required": ["label"]
+          "required": [
+            "label"
+          ]
         }
       },
       {
@@ -233,9 +246,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "label": { "type": "string", "description": "Account label to remove" }
+            "label": {
+              "type": "string",
+              "description": "Account label to remove"
+            }
           },
-          "required": ["label"]
+          "required": [
+            "label"
+          ]
         }
       },
       {
@@ -245,7 +263,7 @@
         "icon": "$(info)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Check Gmail connection status",
-        "modelDescription": "Shows all connected Gmail accounts and which is active. Use when user asks about connection status, which accounts are connected, or which email is being used.",
+        "modelDescription": "Shows all connected Gmail accounts and which is active. Accounts persist GLOBALLY on disk across all VS Code windows. Call this before claiming any account isn't connected.",
         "inputSchema": {
           "type": "object",
           "properties": {}
@@ -258,13 +276,22 @@
         "icon": "$(mail)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Check your Gmail inbox for recent emails",
-        "modelDescription": "Fetches recent Gmail inbox emails. Returns subject, sender, date, snippet, and message ID. Uses the active account unless 'account' parameter specifies a different label (e.g. 'work', 'client'). If user says 'check my work email', set account to 'work'.",
+        "modelDescription": "Fetches recent Gmail inbox emails. Returns subject, sender, date, snippet, message ID, and a summary of all connected accounts. Uses active account unless 'account' parameter specifies a label. If user says 'check my work email', set account to 'work'. Accounts persist globally across VS Code windows.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "maxResults": { "type": "number", "description": "Maximum emails to return (default: 15)" },
-            "query": { "type": "string", "description": "Optional Gmail search query (e.g. 'is:unread', 'from:john')" },
-            "account": { "type": "string", "description": "Account label to use (e.g. 'personal', 'work'). Omit to use active account." }
+            "maxResults": {
+              "type": "number",
+              "description": "Maximum emails to return (default: 15)"
+            },
+            "query": {
+              "type": "string",
+              "description": "Optional Gmail search query (e.g. 'is:unread', 'from:john')"
+            },
+            "account": {
+              "type": "string",
+              "description": "Account label to use (e.g. 'personal', 'work'). Omit to use active account."
+            }
           }
         }
       },
@@ -279,11 +306,22 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "query": { "type": "string", "description": "Gmail search query" },
-            "maxResults": { "type": "number", "description": "Max results (default: 10)" },
-            "account": { "type": "string", "description": "Account label to use. Omit for active account." }
+            "query": {
+              "type": "string",
+              "description": "Gmail search query"
+            },
+            "maxResults": {
+              "type": "number",
+              "description": "Max results (default: 10)"
+            },
+            "account": {
+              "type": "string",
+              "description": "Account label to use. Omit for active account."
+            }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       },
       {
@@ -297,10 +335,18 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "messageId": { "type": "string", "description": "Gmail message ID" },
-            "account": { "type": "string", "description": "Account label. Omit for active account." }
+            "messageId": {
+              "type": "string",
+              "description": "Gmail message ID"
+            },
+            "account": {
+              "type": "string",
+              "description": "Account label. Omit for active account."
+            }
           },
-          "required": ["messageId"]
+          "required": [
+            "messageId"
+          ]
         }
       },
       {
@@ -314,12 +360,28 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "to": { "type": "string", "description": "Recipient email address" },
-            "subject": { "type": "string", "description": "Email subject" },
-            "body": { "type": "string", "description": "Email body text" },
-            "account": { "type": "string", "description": "Account label to send from. Omit for active account." }
+            "to": {
+              "type": "string",
+              "description": "Recipient email address"
+            },
+            "subject": {
+              "type": "string",
+              "description": "Email subject"
+            },
+            "body": {
+              "type": "string",
+              "description": "Email body text"
+            },
+            "account": {
+              "type": "string",
+              "description": "Account label to send from. Omit for active account."
+            }
           },
-          "required": ["to", "subject", "body"]
+          "required": [
+            "to",
+            "subject",
+            "body"
+          ]
         }
       },
       {
@@ -333,11 +395,23 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "messageId": { "type": "string", "description": "Message ID to reply to" },
-            "body": { "type": "string", "description": "Reply body text" },
-            "account": { "type": "string", "description": "Account label. Omit for active account." }
+            "messageId": {
+              "type": "string",
+              "description": "Message ID to reply to"
+            },
+            "body": {
+              "type": "string",
+              "description": "Reply body text"
+            },
+            "account": {
+              "type": "string",
+              "description": "Account label. Omit for active account."
+            }
           },
-          "required": ["messageId", "body"]
+          "required": [
+            "messageId",
+            "body"
+          ]
         }
       },
       {
@@ -351,7 +425,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "account": { "type": "string", "description": "Account label. Omit for active account." }
+            "account": {
+              "type": "string",
+              "description": "Account label. Omit for active account."
+            }
           }
         }
       },
@@ -379,11 +456,22 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "bucket": { "type": "string", "description": "S3 bucket name" },
-            "prefix": { "type": "string", "description": "Optional key prefix to filter objects" },
-            "maxKeys": { "type": "number", "description": "Max objects to return (default: 20)" }
+            "bucket": {
+              "type": "string",
+              "description": "S3 bucket name"
+            },
+            "prefix": {
+              "type": "string",
+              "description": "Optional key prefix to filter objects"
+            },
+            "maxKeys": {
+              "type": "number",
+              "description": "Max objects to return (default: 20)"
+            }
           },
-          "required": ["bucket"]
+          "required": [
+            "bucket"
+          ]
         }
       },
       {
@@ -397,10 +485,19 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "bucket": { "type": "string", "description": "S3 bucket name" },
-            "key": { "type": "string", "description": "Object key (file path)" }
+            "bucket": {
+              "type": "string",
+              "description": "S3 bucket name"
+            },
+            "key": {
+              "type": "string",
+              "description": "Object key (file path)"
+            }
           },
-          "required": ["bucket", "key"]
+          "required": [
+            "bucket",
+            "key"
+          ]
         }
       },
       {
@@ -414,7 +511,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "maxItems": { "type": "number", "description": "Max functions to return (default: 20)" }
+            "maxItems": {
+              "type": "number",
+              "description": "Max functions to return (default: 20)"
+            }
           }
         }
       },
@@ -429,10 +529,18 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "functionName": { "type": "string", "description": "Lambda function name or ARN" },
-            "payload": { "type": "string", "description": "JSON payload to send (default: '{}')" }
+            "functionName": {
+              "type": "string",
+              "description": "Lambda function name or ARN"
+            },
+            "payload": {
+              "type": "string",
+              "description": "JSON payload to send (default: '{}')"
+            }
           },
-          "required": ["functionName"]
+          "required": [
+            "functionName"
+          ]
         }
       },
       {
@@ -459,10 +567,24 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "instanceId": { "type": "string", "description": "EC2 instance ID (e.g. i-1234567890abcdef0)" },
-            "action": { "type": "string", "description": "Action: start, stop, or reboot", "enum": ["start", "stop", "reboot"] }
+            "instanceId": {
+              "type": "string",
+              "description": "EC2 instance ID (e.g. i-1234567890abcdef0)"
+            },
+            "action": {
+              "type": "string",
+              "description": "Action: start, stop, or reboot",
+              "enum": [
+                "start",
+                "stop",
+                "reboot"
+              ]
+            }
           },
-          "required": ["instanceId", "action"]
+          "required": [
+            "instanceId",
+            "action"
+          ]
         }
       },
       {
@@ -476,8 +598,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "prefix": { "type": "string", "description": "Optional log group name prefix filter" },
-            "limit": { "type": "number", "description": "Max groups to return (default: 20)" }
+            "prefix": {
+              "type": "string",
+              "description": "Optional log group name prefix filter"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Max groups to return (default: 20)"
+            }
           }
         }
       },
@@ -492,11 +620,22 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "logGroupName": { "type": "string", "description": "CloudWatch log group name" },
-            "logStreamName": { "type": "string", "description": "Optional specific log stream name" },
-            "limit": { "type": "number", "description": "Max events to return (default: 30)" }
+            "logGroupName": {
+              "type": "string",
+              "description": "CloudWatch log group name"
+            },
+            "logStreamName": {
+              "type": "string",
+              "description": "Optional specific log stream name"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Max events to return (default: 30)"
+            }
           },
-          "required": ["logGroupName"]
+          "required": [
+            "logGroupName"
+          ]
         }
       },
       {
@@ -510,7 +649,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "limit": { "type": "number", "description": "Max projects to return (default: 10)" }
+            "limit": {
+              "type": "number",
+              "description": "Max projects to return (default: 10)"
+            }
           }
         }
       },
@@ -525,8 +667,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "projectName": { "type": "string", "description": "Optional project name to filter" },
-            "limit": { "type": "number", "description": "Max deployments to return (default: 10)" }
+            "projectName": {
+              "type": "string",
+              "description": "Optional project name to filter"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Max deployments to return (default: 10)"
+            }
           }
         }
       },
@@ -541,9 +689,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "deploymentId": { "type": "string", "description": "Vercel deployment ID" }
+            "deploymentId": {
+              "type": "string",
+              "description": "Vercel deployment ID"
+            }
           },
-          "required": ["deploymentId"]
+          "required": [
+            "deploymentId"
+          ]
         }
       },
       {
@@ -557,7 +710,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "limit": { "type": "number", "description": "Max domains to return (default: 20)" }
+            "limit": {
+              "type": "number",
+              "description": "Max domains to return (default: 20)"
+            }
           }
         }
       },
@@ -572,9 +728,195 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "projectName": { "type": "string", "description": "Vercel project name" }
+            "projectName": {
+              "type": "string",
+              "description": "Vercel project name"
+            }
           },
-          "required": ["projectName"]
+          "required": [
+            "projectName"
+          ]
+        }
+      },
+      {
+        "name": "memory_add",
+        "toolReferenceName": "memory-add",
+        "displayName": "Remember Something",
+        "icon": "$(lightbulb)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Save a fact or preference to persistent memory",
+        "modelDescription": "Save a fact, preference, or lesson to persistent memory that survives across ALL sessions and VS Code windows. Use this PROACTIVELY when you learn: user preferences ('I prefer TypeScript'), environment facts ('runs macOS, has Docker'), project conventions ('uses tabs, 120-char lines'), corrections ('don't use sudo for Docker'), completed work ('migrated DB on 2026-01-15'). Two targets: 'memory' for agent notes (environment, conventions, lessons) and 'user' for user profile (name, preferences, communication style). Memory is injected into every conversation — keep entries concise and information-dense.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Where to store: 'memory' (agent notes — environment, conventions, lessons) or 'user' (user profile — preferences, style)",
+              "enum": [
+                "memory",
+                "user"
+              ]
+            },
+            "content": {
+              "type": "string",
+              "description": "Concise fact to remember. Pack multiple related facts into one entry. Example: 'User runs Windows 11, uses PowerShell, has Node 20 and Python 3.12'"
+            }
+          },
+          "required": [
+            "target",
+            "content"
+          ]
+        }
+      },
+      {
+        "name": "memory_remove",
+        "toolReferenceName": "memory-remove",
+        "displayName": "Forget Something",
+        "icon": "$(trash)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Remove an entry from persistent memory",
+        "modelDescription": "Remove a memory entry by providing a unique substring that identifies it. The substring must match exactly one entry. If it matches multiple, you'll be asked to be more specific. Use when information is outdated, wrong, or no longer relevant.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "'memory' or 'user'",
+              "enum": [
+                "memory",
+                "user"
+              ]
+            },
+            "substring": {
+              "type": "string",
+              "description": "Unique substring that identifies the entry to remove (e.g. 'dark mode' to remove an entry about dark mode preference)"
+            }
+          },
+          "required": [
+            "target",
+            "substring"
+          ]
+        }
+      },
+      {
+        "name": "memory_replace",
+        "toolReferenceName": "memory-replace",
+        "displayName": "Update Memory",
+        "icon": "$(edit)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Update an existing memory entry",
+        "modelDescription": "Replace an existing memory entry with updated content. Use old_text as a unique substring to find the entry, and content as the full replacement. Preferred over remove+add when updating information (e.g. user changed their preferred editor, project switched frameworks).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "'memory' or 'user'",
+              "enum": [
+                "memory",
+                "user"
+              ]
+            },
+            "old_text": {
+              "type": "string",
+              "description": "Unique substring identifying the entry to replace"
+            },
+            "content": {
+              "type": "string",
+              "description": "Full replacement text for the entry"
+            }
+          },
+          "required": [
+            "target",
+            "old_text",
+            "content"
+          ]
+        }
+      },
+      {
+        "name": "memory_list",
+        "toolReferenceName": "memory-list",
+        "displayName": "Show Memory",
+        "icon": "$(book)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Show all persistent memory entries",
+        "modelDescription": "Lists all persistent memory entries with capacity usage. Shows both agent notes (MEMORY) and user profile (USER) by default, or filter by target. Use to check what's remembered before adding new entries, and to find entries for replacement or removal.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Optional: 'memory' or 'user' to show only one section. Omit to show both.",
+              "enum": [
+                "memory",
+                "user"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "session_search",
+        "toolReferenceName": "session-search",
+        "displayName": "Search Past Sessions",
+        "icon": "$(search)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Search past tool sessions by keyword",
+        "modelDescription": "Search across all past tool-call sessions by keyword. Returns matching tool calls with input/output excerpts and session IDs. Use when the user references something discussed or done earlier, e.g. 'remember that S3 bucket?', 'what Vercel project did I deploy?', 'find when I emailed John'. Also useful for your own recall — search before asking the user to repeat information.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Keyword(s) to search for in past tool calls"
+            },
+            "maxResults": {
+              "type": "number",
+              "description": "Max results to return (default: 15)"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
+        "name": "session_list",
+        "toolReferenceName": "session-list",
+        "displayName": "List Past Sessions",
+        "icon": "$(history)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Browse recent tool sessions",
+        "modelDescription": "Lists recent tool-call sessions sorted by most recent first. Each session shows start time, tool count, and a preview. Use to give the user an overview of recent activity, or to find a session ID for session_resume.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "number",
+              "description": "Max sessions to list (default: 20)"
+            }
+          }
+        }
+      },
+      {
+        "name": "session_resume",
+        "toolReferenceName": "session-resume",
+        "displayName": "Resume Past Session",
+        "icon": "$(debug-continue)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Load full context from a past session",
+        "modelDescription": "Loads the complete tool-call history from a past session. Returns every tool invocation with timestamps, inputs, and outputs. Use when the user says 'continue where we left off', 'resume that conversation', or when you need full context from a session found via session_search or session_list.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Session ID to resume (get from session_list or session_search)"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
         }
       }
     ]
