@@ -45,6 +45,7 @@ const awsTools_1 = require("./tools/awsTools");
 const vercelTools_1 = require("./tools/vercelTools");
 const memoryTools_1 = require("./tools/memoryTools");
 const sessionTools_1 = require("./tools/sessionTools");
+const githubTools_1 = require("./tools/githubTools");
 let gmailClient;
 function activate(context) {
     const authProvider = new googleAuthProvider_1.GoogleAuthProvider(context);
@@ -128,6 +129,7 @@ function activate(context) {
     (0, vercelTools_1.registerVercelTools)(context);
     (0, memoryTools_1.registerMemoryTools)(context);
     (0, sessionTools_1.registerSessionTools)(context);
+    (0, githubTools_1.registerGithubTools)(context);
     // ── Status Bar: Active Gmail Account ────────────────────
     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
     statusBar.command = 'gmail-connector.quickSwitch';

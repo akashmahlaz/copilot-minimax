@@ -8,6 +8,7 @@ import { registerAwsTools } from './tools/awsTools';
 import { registerVercelTools } from './tools/vercelTools';
 import { registerMemoryTools } from './tools/memoryTools';
 import { registerSessionTools } from './tools/sessionTools';
+import { registerGithubTools } from './tools/githubTools';
 
 let gmailClient: GmailClient | undefined;
 
@@ -125,6 +126,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerVercelTools(context);
     registerMemoryTools(context);
     registerSessionTools(context);
+    registerGithubTools(context);
 
     // ── Status Bar: Active Gmail Account ────────────────────
 

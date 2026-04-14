@@ -62,6 +62,11 @@
           "type": "string",
           "default": "",
           "description": "Vercel API Token (from vercel.com/account/tokens)"
+        },
+        "githubConnector.token": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub personal access token (from github.com/settings/tokens — needs repo, read:org scopes)"
         }
       }
     },
@@ -917,6 +922,174 @@
           "required": [
             "sessionId"
           ]
+        }
+      },
+      {
+        "name": "github_list_repos",
+        "toolReferenceName": "gh-repos",
+        "displayName": "List GitHub Repos",
+        "icon": "$(repo)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your GitHub repositories",
+        "modelDescription": "Lists the authenticated user's GitHub repositories. Returns name, language, stars, visibility, and last update date. Use when user says 'show my repos', 'list my GitHub projects', etc.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "description": "Filter: owner, all, or member (default: owner)", "enum": ["owner", "all", "member"] },
+            "sort": { "type": "string", "description": "Sort by: updated, created, pushed, full_name (default: updated)", "enum": ["updated", "created", "pushed", "full_name"] },
+            "perPage": { "type": "number", "description": "Max repos to return (default: 20, max: 100)" }
+          }
+        }
+      },
+      {
+        "name": "github_repo_info",
+        "toolReferenceName": "gh-repo-info",
+        "displayName": "GitHub Repo Info",
+        "icon": "$(info)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Get details about a GitHub repository",
+        "modelDescription": "Gets detailed info about a specific GitHub repository: description, language, stars, forks, default branch, open issues, clone URL. Provide owner and repo name.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner (user or org)" },
+            "repo": { "type": "string", "description": "Repository name" }
+          },
+          "required": ["owner", "repo"]
+        }
+      },
+      {
+        "name": "github_list_issues",
+        "toolReferenceName": "gh-issues",
+        "displayName": "List GitHub Issues",
+        "icon": "$(issues)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List issues in a GitHub repository",
+        "modelDescription": "Lists issues in a GitHub repository filtered by state and labels. Returns issue number, title, author, date, and comment count. Does not include pull requests.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "state": { "type": "string", "description": "Filter: open, closed, all (default: open)", "enum": ["open", "closed", "all"] },
+            "labels": { "type": "string", "description": "Comma-separated label names to filter by" },
+            "perPage": { "type": "number", "description": "Max issues (default: 15)" }
+          },
+          "required": ["owner", "repo"]
+        }
+      },
+      {
+        "name": "github_create_issue",
+        "toolReferenceName": "gh-create-issue",
+        "displayName": "Create GitHub Issue",
+        "icon": "$(plus)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create a new issue in a GitHub repository",
+        "modelDescription": "Creates a new issue in a GitHub repository. Requires owner, repo, and title. Optionally add body, labels, and assignees. Always confirm with user before creating.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "title": { "type": "string", "description": "Issue title" },
+            "body": { "type": "string", "description": "Issue body (Markdown supported)" },
+            "labels": { "type": "array", "items": { "type": "string" }, "description": "Labels to apply" },
+            "assignees": { "type": "array", "items": { "type": "string" }, "description": "GitHub usernames to assign" }
+          },
+          "required": ["owner", "repo", "title"]
+        }
+      },
+      {
+        "name": "github_list_prs",
+        "toolReferenceName": "gh-prs",
+        "displayName": "List Pull Requests",
+        "icon": "$(git-pull-request)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List pull requests in a GitHub repository",
+        "modelDescription": "Lists pull requests in a GitHub repository. Returns PR number, title, branches, author, date, and additions/deletions. Filter by state.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "state": { "type": "string", "description": "Filter: open, closed, all (default: open)", "enum": ["open", "closed", "all"] },
+            "perPage": { "type": "number", "description": "Max PRs (default: 15)" }
+          },
+          "required": ["owner", "repo"]
+        }
+      },
+      {
+        "name": "github_pr_details",
+        "toolReferenceName": "gh-pr-info",
+        "displayName": "PR Details",
+        "icon": "$(git-pull-request)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Get details of a specific pull request",
+        "modelDescription": "Gets full details of a specific pull request by number: title, state, branches, additions/deletions, changed files, body, comments, and review count.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "pullNumber": { "type": "number", "description": "Pull request number" }
+          },
+          "required": ["owner", "repo", "pullNumber"]
+        }
+      },
+      {
+        "name": "github_create_pr",
+        "toolReferenceName": "gh-create-pr",
+        "displayName": "Create Pull Request",
+        "icon": "$(git-pull-request-create)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create a new pull request",
+        "modelDescription": "Creates a new pull request. Requires owner, repo, title, head (source branch), and base (target branch). Always confirm with user before creating.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "title": { "type": "string", "description": "PR title" },
+            "head": { "type": "string", "description": "Source branch name" },
+            "base": { "type": "string", "description": "Target branch name (e.g. main)" },
+            "body": { "type": "string", "description": "PR description (Markdown)" },
+            "draft": { "type": "boolean", "description": "Create as draft PR" }
+          },
+          "required": ["owner", "repo", "title", "head", "base"]
+        }
+      },
+      {
+        "name": "github_list_notifications",
+        "toolReferenceName": "gh-notifications",
+        "displayName": "GitHub Notifications",
+        "icon": "$(bell)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your GitHub notifications",
+        "modelDescription": "Lists GitHub notifications. Shows issue/PR titles, repository, reason, and unread status. Use when user asks 'check my GitHub notifications', 'any updates on GitHub?'.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "all": { "type": "boolean", "description": "Include read notifications (default: false, unread only)" },
+            "perPage": { "type": "number", "description": "Max notifications (default: 20)" }
+          }
+        }
+      },
+      {
+        "name": "github_list_branches",
+        "toolReferenceName": "gh-branches",
+        "displayName": "List Branches",
+        "icon": "$(git-branch)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List branches in a GitHub repository",
+        "modelDescription": "Lists branches in a GitHub repository. Shows branch name, protection status, and latest commit SHA.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": { "type": "string", "description": "Repository owner" },
+            "repo": { "type": "string", "description": "Repository name" },
+            "perPage": { "type": "number", "description": "Max branches (default: 30)" }
+          },
+          "required": ["owner", "repo"]
         }
       }
     ]
