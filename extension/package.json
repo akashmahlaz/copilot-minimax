@@ -13,7 +13,8 @@
   "activationEvents": [
     "onStartupFinished",
     "onView:gmail-inbox",
-    "onChatParticipant:copilot-gmail-connector.gmail"
+    "onChatParticipant:copilot-gmail-connector.gmail",
+    "onChatParticipant:copilot-whatsapp-connector.whatsapp"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -67,6 +68,11 @@
           "type": "string",
           "default": "",
           "description": "GitHub personal access token (from github.com/settings/tokens — needs repo, read:org scopes)"
+        },
+        "whatsappConnector.allowedNumbers": {
+          "type": "array",
+          "default": [],
+          "description": "WhatsApp numbers (JIDs) authorized to control Copilot (e.g. ['919876543210@s.whatsapp.net']). Empty = only the linked device's own number."
         }
       }
     },
@@ -76,6 +82,11 @@
           "id": "gmail-connector",
           "title": "Gmail",
           "icon": "media/gmail-icon.svg"
+        },
+        {
+          "id": "whatsapp-connector",
+          "title": "WhatsApp",
+          "icon": "media/whatsapp-icon.svg"
         }
       ]
     },
@@ -85,12 +96,22 @@
           "id": "gmail-inbox",
           "name": "Inbox"
         }
+      ],
+      "whatsapp-connector": [
+        {
+          "id": "whatsapp-status",
+          "name": "Status"
+        }
       ]
     },
     "viewsWelcome": [
       {
         "view": "gmail-inbox",
         "contents": "Connect your Gmail account to browse, search and manage emails right from VS Code.\n[Connect Gmail](command:gmail-connector.connect)\n\nYou need a Google Cloud OAuth Client ID.\nSee [Setup Guide](command:gmail-connector.openSetup) for instructions."
+      },
+      {
+        "view": "whatsapp-status",
+        "contents": "Connect your WhatsApp to chat with Copilot from your phone.\n[Connect WhatsApp](command:whatsapp-connector.connect)\n\nClick the ⚡ status bar item (bottom-right) to open the QR scanner."
       }
     ],
     "commands": [
@@ -126,6 +147,22 @@
         "command": "gmail-connector.openSetup",
         "title": "Open Setup Guide",
         "category": "Gmail"
+      },
+      {
+        "command": "whatsapp-connector.connect",
+        "title": "Connect WhatsApp",
+        "category": "WhatsApp",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "whatsapp-connector.disconnect",
+        "title": "Disconnect WhatsApp",
+        "category": "WhatsApp"
+      },
+      {
+        "command": "whatsapp-connector.status",
+        "title": "WhatsApp Status",
+        "category": "WhatsApp"
       }
     ],
     "menus": {
@@ -180,6 +217,27 @@
           {
             "name": "labels",
             "description": "List your Gmail labels"
+          }
+        ]
+      },
+      {
+        "id": "copilot-whatsapp-connector.whatsapp",
+        "name": "whatsapp",
+        "fullName": "WhatsApp Assistant",
+        "description": "WhatsApp integration — connect, disconnect, and send messages via WhatsApp",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "status",
+            "description": "Show WhatsApp connection status"
+          },
+          {
+            "name": "connect",
+            "description": "Connect WhatsApp via QR code"
+          },
+          {
+            "name": "disconnect",
+            "description": "Disconnect WhatsApp session"
           }
         ]
       }
@@ -935,9 +993,29 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "type": { "type": "string", "description": "Filter: owner, all, or member (default: owner)", "enum": ["owner", "all", "member"] },
-            "sort": { "type": "string", "description": "Sort by: updated, created, pushed, full_name (default: updated)", "enum": ["updated", "created", "pushed", "full_name"] },
-            "perPage": { "type": "number", "description": "Max repos to return (default: 20, max: 100)" }
+            "type": {
+              "type": "string",
+              "description": "Filter: owner, all, or member (default: owner)",
+              "enum": [
+                "owner",
+                "all",
+                "member"
+              ]
+            },
+            "sort": {
+              "type": "string",
+              "description": "Sort by: updated, created, pushed, full_name (default: updated)",
+              "enum": [
+                "updated",
+                "created",
+                "pushed",
+                "full_name"
+              ]
+            },
+            "perPage": {
+              "type": "number",
+              "description": "Max repos to return (default: 20, max: 100)"
+            }
           }
         }
       },
@@ -952,10 +1030,19 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner (user or org)" },
-            "repo": { "type": "string", "description": "Repository name" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner (user or org)"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            }
           },
-          "required": ["owner", "repo"]
+          "required": [
+            "owner",
+            "repo"
+          ]
         }
       },
       {
@@ -969,13 +1056,36 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "state": { "type": "string", "description": "Filter: open, closed, all (default: open)", "enum": ["open", "closed", "all"] },
-            "labels": { "type": "string", "description": "Comma-separated label names to filter by" },
-            "perPage": { "type": "number", "description": "Max issues (default: 15)" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "state": {
+              "type": "string",
+              "description": "Filter: open, closed, all (default: open)",
+              "enum": [
+                "open",
+                "closed",
+                "all"
+              ]
+            },
+            "labels": {
+              "type": "string",
+              "description": "Comma-separated label names to filter by"
+            },
+            "perPage": {
+              "type": "number",
+              "description": "Max issues (default: 15)"
+            }
           },
-          "required": ["owner", "repo"]
+          "required": [
+            "owner",
+            "repo"
+          ]
         }
       },
       {
@@ -989,14 +1099,42 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "title": { "type": "string", "description": "Issue title" },
-            "body": { "type": "string", "description": "Issue body (Markdown supported)" },
-            "labels": { "type": "array", "items": { "type": "string" }, "description": "Labels to apply" },
-            "assignees": { "type": "array", "items": { "type": "string" }, "description": "GitHub usernames to assign" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "title": {
+              "type": "string",
+              "description": "Issue title"
+            },
+            "body": {
+              "type": "string",
+              "description": "Issue body (Markdown supported)"
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Labels to apply"
+            },
+            "assignees": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "GitHub usernames to assign"
+            }
           },
-          "required": ["owner", "repo", "title"]
+          "required": [
+            "owner",
+            "repo",
+            "title"
+          ]
         }
       },
       {
@@ -1010,12 +1148,32 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "state": { "type": "string", "description": "Filter: open, closed, all (default: open)", "enum": ["open", "closed", "all"] },
-            "perPage": { "type": "number", "description": "Max PRs (default: 15)" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "state": {
+              "type": "string",
+              "description": "Filter: open, closed, all (default: open)",
+              "enum": [
+                "open",
+                "closed",
+                "all"
+              ]
+            },
+            "perPage": {
+              "type": "number",
+              "description": "Max PRs (default: 15)"
+            }
           },
-          "required": ["owner", "repo"]
+          "required": [
+            "owner",
+            "repo"
+          ]
         }
       },
       {
@@ -1029,11 +1187,24 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "pullNumber": { "type": "number", "description": "Pull request number" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "pullNumber": {
+              "type": "number",
+              "description": "Pull request number"
+            }
           },
-          "required": ["owner", "repo", "pullNumber"]
+          "required": [
+            "owner",
+            "repo",
+            "pullNumber"
+          ]
         }
       },
       {
@@ -1047,15 +1218,42 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "title": { "type": "string", "description": "PR title" },
-            "head": { "type": "string", "description": "Source branch name" },
-            "base": { "type": "string", "description": "Target branch name (e.g. main)" },
-            "body": { "type": "string", "description": "PR description (Markdown)" },
-            "draft": { "type": "boolean", "description": "Create as draft PR" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "title": {
+              "type": "string",
+              "description": "PR title"
+            },
+            "head": {
+              "type": "string",
+              "description": "Source branch name"
+            },
+            "base": {
+              "type": "string",
+              "description": "Target branch name (e.g. main)"
+            },
+            "body": {
+              "type": "string",
+              "description": "PR description (Markdown)"
+            },
+            "draft": {
+              "type": "boolean",
+              "description": "Create as draft PR"
+            }
           },
-          "required": ["owner", "repo", "title", "head", "base"]
+          "required": [
+            "owner",
+            "repo",
+            "title",
+            "head",
+            "base"
+          ]
         }
       },
       {
@@ -1069,8 +1267,14 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "all": { "type": "boolean", "description": "Include read notifications (default: false, unread only)" },
-            "perPage": { "type": "number", "description": "Max notifications (default: 20)" }
+            "all": {
+              "type": "boolean",
+              "description": "Include read notifications (default: false, unread only)"
+            },
+            "perPage": {
+              "type": "number",
+              "description": "Max notifications (default: 20)"
+            }
           }
         }
       },
@@ -1085,13 +1289,67 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "description": "Repository owner" },
-            "repo": { "type": "string", "description": "Repository name" },
-            "perPage": { "type": "number", "description": "Max branches (default: 30)" }
+            "owner": {
+              "type": "string",
+              "description": "Repository owner"
+            },
+            "repo": {
+              "type": "string",
+              "description": "Repository name"
+            },
+            "perPage": {
+              "type": "number",
+              "description": "Max branches (default: 30)"
+            }
           },
-          "required": ["owner", "repo"]
+          "required": [
+            "owner",
+            "repo"
+          ]
+        }
+      },
+      {
+        "name": "whatsapp_send_message",
+        "toolReferenceName": "whatsapp-send",
+        "displayName": "Send WhatsApp Message",
+        "icon": "$(zap)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Send a text message via WhatsApp",
+        "modelDescription": "Sends a WhatsApp text message to a JID. Use the user's own number or a known JID. Confirm with user before sending.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "jid": {
+              "type": "string",
+              "description": "WhatsApp JID (e.g. 919876543210@s.whatsapp.net)"
+            },
+            "text": {
+              "type": "string",
+              "description": "Message text"
+            }
+          },
+          "required": [
+            "jid",
+            "text"
+          ]
+        }
+      },
+      {
+        "name": "whatsapp_get_status",
+        "toolReferenceName": "whatsapp-status",
+        "displayName": "WhatsApp Status",
+        "icon": "$(info)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Check WhatsApp connection status",
+        "modelDescription": "Returns WhatsApp connection status and own JID.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
         }
       }
     ]
-  }
+  },
+  "dependencies": {
+    "baileys": "^7.0.0-rc.9"
+  },
 }

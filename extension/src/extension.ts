@@ -9,10 +9,15 @@ import { registerVercelTools } from './tools/vercelTools';
 import { registerMemoryTools } from './tools/memoryTools';
 import { registerSessionTools } from './tools/sessionTools';
 import { registerGithubTools } from './tools/githubTools';
+import { WhatsAppBridge } from './whatsapp/whatsappBridge';
+import { WhatsAppStatusBar } from './whatsapp/whatsappStatusBar';
+import { registerWhatsAppTools } from './tools/whatsappTools';
+import { registerWhatsAppParticipant } from './chat/whatsappParticipant';
+import { connectWhatsApp, getClient as getWhatsAppClient, disconnect as disconnectWhatsApp } from './whatsapp/baileysClient';
 
 let gmailClient: GmailClient | undefined;
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const authProvider = new GoogleAuthProvider(context);
     gmailClient = new GmailClient(authProvider);
     const treeProvider = new GmailTreeProvider(gmailClient);
@@ -128,6 +133,50 @@ export function activate(context: vscode.ExtensionContext): void {
     registerSessionTools(context);
     registerGithubTools(context);
 
+    // ── WhatsApp (Baileys) ──────────────────────────────────
+
+    // Cast to bypass TypeScript module resolution quirk with the async function type
+    type ConnectFn = (ctx: vscode.ExtensionContext) => Promise<import('./whatsapp/baileysClient').WhatsAppClient>;
+    const waClient = await (connectWhatsApp as ConnectFn)(context);
+    const waBridge = new WhatsAppBridge();
+    waBridge.setClient(waClient);
+    waBridge.start();
+
+    const waStatusBar = new WhatsAppStatusBar(waClient);
+    waStatusBar.show();
+
+    registerWhatsAppTools(context, waClient);
+    registerWhatsAppParticipant(context, waClient, waStatusBar);
+
+    // Status bar click → open panel
+    context.subscriptions.push(
+        vscode.commands.registerCommand('whatsapp-connector.connect', async () => {
+            waStatusBar.openPanel();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('whatsapp-connector.disconnect', async () => {
+            await disconnectWhatsApp();
+            vscode.window.showInformationMessage('WhatsApp disconnected.');
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('whatsapp-connector.status', async () => {
+            const client = getWhatsAppClient();
+            const s = client?.getStatus() ?? 'disconnected';
+            const jid = client?.getOwnJid();
+            if (s === 'connected') {
+                vscode.window.showInformationMessage(`WhatsApp: Connected as ${jid}`);
+            } else if (s === 'connecting') {
+                vscode.window.showInformationMessage('WhatsApp: Connecting…');
+            } else {
+                vscode.window.showInformationMessage('WhatsApp: Disconnected — click the ⚡ status bar item to connect.');
+            }
+        })
+    );
+
     // ── Status Bar: Active Gmail Account ────────────────────
 
     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
@@ -223,6 +272,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
     gmailClient = undefined;
+    disconnectWhatsApp().catch(() => { /* ignore */ });
 }
 
 // ── Email Webview Renderer ──────────────────────────────────

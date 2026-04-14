@@ -46,8 +46,13 @@ const vercelTools_1 = require("./tools/vercelTools");
 const memoryTools_1 = require("./tools/memoryTools");
 const sessionTools_1 = require("./tools/sessionTools");
 const githubTools_1 = require("./tools/githubTools");
+const whatsappBridge_1 = require("./whatsapp/whatsappBridge");
+const whatsappStatusBar_1 = require("./whatsapp/whatsappStatusBar");
+const whatsappTools_1 = require("./tools/whatsappTools");
+const whatsappParticipant_1 = require("./chat/whatsappParticipant");
+const baileysClient_1 = require("./whatsapp/baileysClient");
 let gmailClient;
-function activate(context) {
+async function activate(context) {
     const authProvider = new googleAuthProvider_1.GoogleAuthProvider(context);
     gmailClient = new gmailClient_1.GmailClient(authProvider);
     const treeProvider = new gmailTreeProvider_1.GmailTreeProvider(gmailClient);
@@ -130,6 +135,36 @@ function activate(context) {
     (0, memoryTools_1.registerMemoryTools)(context);
     (0, sessionTools_1.registerSessionTools)(context);
     (0, githubTools_1.registerGithubTools)(context);
+    const waClient = await baileysClient_1.connectWhatsApp(context);
+    const waBridge = new whatsappBridge_1.WhatsAppBridge();
+    waBridge.setClient(waClient);
+    waBridge.start();
+    const waStatusBar = new whatsappStatusBar_1.WhatsAppStatusBar(waClient);
+    waStatusBar.show();
+    (0, whatsappTools_1.registerWhatsAppTools)(context, waClient);
+    (0, whatsappParticipant_1.registerWhatsAppParticipant)(context, waClient, waStatusBar);
+    // Status bar click → open panel
+    context.subscriptions.push(vscode.commands.registerCommand('whatsapp-connector.connect', async () => {
+        waStatusBar.openPanel();
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('whatsapp-connector.disconnect', async () => {
+        await (0, baileysClient_1.disconnect)();
+        vscode.window.showInformationMessage('WhatsApp disconnected.');
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand('whatsapp-connector.status', async () => {
+        const client = (0, baileysClient_1.getClient)();
+        const s = client?.getStatus() ?? 'disconnected';
+        const jid = client?.getOwnJid();
+        if (s === 'connected') {
+            vscode.window.showInformationMessage(`WhatsApp: Connected as ${jid}`);
+        }
+        else if (s === 'connecting') {
+            vscode.window.showInformationMessage('WhatsApp: Connecting…');
+        }
+        else {
+            vscode.window.showInformationMessage('WhatsApp: Disconnected — click the ⚡ status bar item to connect.');
+        }
+    }));
     // ── Status Bar: Active Gmail Account ────────────────────
     const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
     statusBar.command = 'gmail-connector.quickSwitch';
@@ -207,6 +242,7 @@ function activate(context) {
 }
 function deactivate() {
     gmailClient = undefined;
+    (0, baileysClient_1.disconnect)().catch(() => { });
 }
 // ── Email Webview Renderer ──────────────────────────────────
 function renderEmailWebview(email) {
