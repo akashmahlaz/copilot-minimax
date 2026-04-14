@@ -3,6 +3,9 @@ import { GoogleAuthProvider } from './auth/googleAuthProvider';
 import { GmailClient } from './gmail/gmailClient';
 import { GmailTreeProvider } from './gmail/gmailTreeProvider';
 import { registerGmailParticipant } from './chat/gmailParticipant';
+import { registerGmailTools } from './tools/gmailTools';
+import { registerAwsTools } from './tools/awsTools';
+import { registerVercelTools } from './tools/vercelTools';
 
 let gmailClient: GmailClient | undefined;
 
@@ -112,6 +115,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // ── Copilot Chat Participant ────────────────────────────
 
     registerGmailParticipant(context, gmailClient);
+
+    // ── Language Model Tools (show in Copilot tool picker) ──
+
+    registerGmailTools(context, gmailClient, authProvider);
+    registerAwsTools(context);
+    registerVercelTools(context);
 }
 
 export function deactivate(): void {

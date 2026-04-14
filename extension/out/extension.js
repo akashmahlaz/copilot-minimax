@@ -40,6 +40,9 @@ const googleAuthProvider_1 = require("./auth/googleAuthProvider");
 const gmailClient_1 = require("./gmail/gmailClient");
 const gmailTreeProvider_1 = require("./gmail/gmailTreeProvider");
 const gmailParticipant_1 = require("./chat/gmailParticipant");
+const gmailTools_1 = require("./tools/gmailTools");
+const awsTools_1 = require("./tools/awsTools");
+const vercelTools_1 = require("./tools/vercelTools");
 let gmailClient;
 function activate(context) {
     const authProvider = new googleAuthProvider_1.GoogleAuthProvider(context);
@@ -117,6 +120,10 @@ function activate(context) {
     }));
     // ── Copilot Chat Participant ────────────────────────────
     (0, gmailParticipant_1.registerGmailParticipant)(context, gmailClient);
+    // ── Language Model Tools (show in Copilot tool picker) ──
+    (0, gmailTools_1.registerGmailTools)(context, gmailClient, authProvider);
+    (0, awsTools_1.registerAwsTools)(context);
+    (0, vercelTools_1.registerVercelTools)(context);
 }
 function deactivate() {
     gmailClient = undefined;

@@ -10,7 +10,11 @@
   "categories": [
     "Chat"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:gmail-inbox",
+    "onChatParticipant:copilot-gmail-connector.gmail"
+  ],
   "main": "./out/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -35,6 +39,26 @@
           "type": "string",
           "default": "",
           "description": "Google OAuth2 Client Secret"
+        },
+        "awsConnector.accessKeyId": {
+          "type": "string",
+          "default": "",
+          "description": "AWS Access Key ID"
+        },
+        "awsConnector.secretAccessKey": {
+          "type": "string",
+          "default": "",
+          "description": "AWS Secret Access Key"
+        },
+        "awsConnector.region": {
+          "type": "string",
+          "default": "us-east-1",
+          "description": "AWS Region (e.g. us-east-1, eu-west-1)"
+        },
+        "vercelConnector.token": {
+          "type": "string",
+          "default": "",
+          "description": "Vercel API Token (from vercel.com/account/tokens)"
         }
       }
     },
@@ -150,6 +174,398 @@
             "description": "List your Gmail labels"
           }
         ]
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "gmail_check_inbox",
+        "toolReferenceName": "gmail-inbox",
+        "displayName": "Check Gmail Inbox",
+        "icon": "$(mail)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Check your Gmail inbox for recent emails",
+        "modelDescription": "Fetches the user's recent Gmail inbox emails. Returns subject, sender, date, snippet, and message ID for each email. Call this when the user wants to check their email, see what's new, or view their inbox.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "maxResults": {
+              "type": "number",
+              "description": "Maximum number of emails to return (default: 15)",
+              "default": 15
+            },
+            "query": {
+              "type": "string",
+              "description": "Optional Gmail search query to filter results (e.g. 'is:unread', 'from:john')"
+            }
+          }
+        }
+      },
+      {
+        "name": "gmail_search_emails",
+        "toolReferenceName": "gmail-search",
+        "displayName": "Search Gmail",
+        "icon": "$(search)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Search your Gmail for specific emails",
+        "modelDescription": "Searches the user's Gmail using Gmail search syntax. Supports queries like 'from:user@example.com', 'subject:meeting', 'is:unread', 'has:attachment', 'after:2025/01/01'. Returns matching emails with subject, sender, date, snippet, and ID.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Gmail search query (e.g. 'from:boss subject:urgent', 'is:unread has:attachment')"
+            },
+            "maxResults": {
+              "type": "number",
+              "description": "Maximum results to return (default: 10)",
+              "default": 10
+            }
+          },
+          "required": ["query"]
+        }
+      },
+      {
+        "name": "gmail_read_email",
+        "toolReferenceName": "gmail-read",
+        "displayName": "Read Gmail Message",
+        "icon": "$(file-text)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Read the full content of a Gmail message",
+        "modelDescription": "Reads the full content of a specific Gmail message by ID. Returns the complete email including from, to, date, subject, body text, and labels. Use this after listing emails to read a specific one the user is interested in.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "messageId": {
+              "type": "string",
+              "description": "The Gmail message ID to read"
+            }
+          },
+          "required": ["messageId"]
+        }
+      },
+      {
+        "name": "gmail_send_email",
+        "toolReferenceName": "gmail-send",
+        "displayName": "Send Gmail",
+        "icon": "$(send)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Send an email from your Gmail",
+        "modelDescription": "Sends a new email from the user's Gmail account. Requires recipient (to), subject, and body. Always confirm with the user before sending.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "type": "string",
+              "description": "Recipient email address"
+            },
+            "subject": {
+              "type": "string",
+              "description": "Email subject line"
+            },
+            "body": {
+              "type": "string",
+              "description": "Email body text"
+            }
+          },
+          "required": ["to", "subject", "body"]
+        }
+      },
+      {
+        "name": "gmail_reply_to_email",
+        "toolReferenceName": "gmail-reply",
+        "displayName": "Reply to Gmail",
+        "icon": "$(reply)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Reply to a Gmail message",
+        "modelDescription": "Replies to an existing Gmail message in its thread. Requires the original message ID and the reply body text. Always confirm with the user before sending the reply.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "messageId": {
+              "type": "string",
+              "description": "The Gmail message ID to reply to"
+            },
+            "body": {
+              "type": "string",
+              "description": "Reply body text"
+            }
+          },
+          "required": ["messageId", "body"]
+        }
+      },
+      {
+        "name": "gmail_get_labels",
+        "toolReferenceName": "gmail-labels",
+        "displayName": "List Gmail Labels",
+        "icon": "$(tag)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your Gmail labels and folders",
+        "modelDescription": "Lists all Gmail labels (folders) for the user's account, including system labels (INBOX, SENT, etc.) and custom user labels.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "gmail_connect_account",
+        "toolReferenceName": "gmail-connect",
+        "displayName": "Connect Gmail",
+        "icon": "$(plug)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Connect a Gmail account",
+        "modelDescription": "Connect a Gmail account via Google OAuth. Triggers the browser-based OAuth flow. Use when the user wants to connect, add, or sign in to their Gmail.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "gmail_disconnect_account",
+        "toolReferenceName": "gmail-disconnect",
+        "displayName": "Disconnect Gmail",
+        "icon": "$(debug-disconnect)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Disconnect your Gmail account",
+        "modelDescription": "Disconnects the current Gmail account and removes the stored token. Use when the user wants to sign out, disconnect, or remove their Gmail.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "gmail_connection_status",
+        "toolReferenceName": "gmail-status",
+        "displayName": "Gmail Status",
+        "icon": "$(info)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Check Gmail connection status",
+        "modelDescription": "Check whether Gmail is connected and which account is active. Use when user asks about connection status or which account is connected.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "aws_s3_list_buckets",
+        "toolReferenceName": "aws-s3-buckets",
+        "displayName": "List S3 Buckets",
+        "icon": "$(database)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your AWS S3 buckets",
+        "modelDescription": "Lists all S3 buckets in the user's AWS account. Returns bucket names and creation dates.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "aws_s3_list_objects",
+        "toolReferenceName": "aws-s3-objects",
+        "displayName": "List S3 Objects",
+        "icon": "$(file)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List objects in an S3 bucket",
+        "modelDescription": "Lists objects in an AWS S3 bucket, optionally filtered by prefix. Returns object keys and sizes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "bucket": { "type": "string", "description": "S3 bucket name" },
+            "prefix": { "type": "string", "description": "Optional key prefix to filter objects" },
+            "maxKeys": { "type": "number", "description": "Max objects to return (default: 20)" }
+          },
+          "required": ["bucket"]
+        }
+      },
+      {
+        "name": "aws_s3_get_object",
+        "toolReferenceName": "aws-s3-get",
+        "displayName": "Get S3 Object",
+        "icon": "$(cloud-download)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Read content of an S3 object",
+        "modelDescription": "Downloads and reads the content of an S3 object. Best for text files. Returns first 3000 chars of content.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "bucket": { "type": "string", "description": "S3 bucket name" },
+            "key": { "type": "string", "description": "Object key (file path)" }
+          },
+          "required": ["bucket", "key"]
+        }
+      },
+      {
+        "name": "aws_lambda_list_functions",
+        "toolReferenceName": "aws-lambda-list",
+        "displayName": "List Lambda Functions",
+        "icon": "$(zap)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your AWS Lambda functions",
+        "modelDescription": "Lists Lambda functions in the user's AWS account. Returns function name, runtime, memory, and timeout.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "maxItems": { "type": "number", "description": "Max functions to return (default: 20)" }
+          }
+        }
+      },
+      {
+        "name": "aws_lambda_invoke",
+        "toolReferenceName": "aws-lambda-invoke",
+        "displayName": "Invoke Lambda Function",
+        "icon": "$(play)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Invoke an AWS Lambda function",
+        "modelDescription": "Invokes a Lambda function with an optional JSON payload. Returns the function result. Confirm with user before invoking.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "functionName": { "type": "string", "description": "Lambda function name or ARN" },
+            "payload": { "type": "string", "description": "JSON payload to send (default: '{}')" }
+          },
+          "required": ["functionName"]
+        }
+      },
+      {
+        "name": "aws_ec2_list_instances",
+        "toolReferenceName": "aws-ec2-list",
+        "displayName": "List EC2 Instances",
+        "icon": "$(server)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your EC2 instances",
+        "modelDescription": "Lists EC2 instances in the user's AWS account with instance ID, type, and state.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "aws_ec2_manage_instance",
+        "toolReferenceName": "aws-ec2-manage",
+        "displayName": "Manage EC2 Instance",
+        "icon": "$(settings-gear)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Start, stop, or reboot an EC2 instance",
+        "modelDescription": "Start, stop, or reboot an EC2 instance. Requires instance ID and action. Always confirm with the user before executing.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "instanceId": { "type": "string", "description": "EC2 instance ID (e.g. i-1234567890abcdef0)" },
+            "action": { "type": "string", "description": "Action: start, stop, or reboot", "enum": ["start", "stop", "reboot"] }
+          },
+          "required": ["instanceId", "action"]
+        }
+      },
+      {
+        "name": "aws_cloudwatch_log_groups",
+        "toolReferenceName": "aws-cw-groups",
+        "displayName": "List CloudWatch Log Groups",
+        "icon": "$(output)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List CloudWatch log groups",
+        "modelDescription": "Lists CloudWatch log groups, optionally filtered by prefix. Returns group name, storage size, and retention.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "prefix": { "type": "string", "description": "Optional log group name prefix filter" },
+            "limit": { "type": "number", "description": "Max groups to return (default: 20)" }
+          }
+        }
+      },
+      {
+        "name": "aws_cloudwatch_get_logs",
+        "toolReferenceName": "aws-cw-logs",
+        "displayName": "Get CloudWatch Logs",
+        "icon": "$(list-flat)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Get recent CloudWatch log events",
+        "modelDescription": "Fetches recent log events from a CloudWatch log group. If no stream specified, uses the latest stream. Returns timestamps and messages.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "logGroupName": { "type": "string", "description": "CloudWatch log group name" },
+            "logStreamName": { "type": "string", "description": "Optional specific log stream name" },
+            "limit": { "type": "number", "description": "Max events to return (default: 30)" }
+          },
+          "required": ["logGroupName"]
+        }
+      },
+      {
+        "name": "vercel_list_projects",
+        "toolReferenceName": "vercel-projects",
+        "displayName": "List Vercel Projects",
+        "icon": "$(project)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your Vercel projects",
+        "modelDescription": "Lists Vercel projects in the user's account. Returns project name, framework, and last update date.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": { "type": "number", "description": "Max projects to return (default: 10)" }
+          }
+        }
+      },
+      {
+        "name": "vercel_list_deployments",
+        "toolReferenceName": "vercel-deployments",
+        "displayName": "List Vercel Deployments",
+        "icon": "$(cloud-upload)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List Vercel deployments",
+        "modelDescription": "Lists recent Vercel deployments. Optionally filter by project name. Returns deployment name, state, URL, and date.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectName": { "type": "string", "description": "Optional project name to filter" },
+            "limit": { "type": "number", "description": "Max deployments to return (default: 10)" }
+          }
+        }
+      },
+      {
+        "name": "vercel_deployment_details",
+        "toolReferenceName": "vercel-deploy-info",
+        "displayName": "Vercel Deployment Details",
+        "icon": "$(info)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Get details of a Vercel deployment",
+        "modelDescription": "Gets full details of a specific Vercel deployment by ID. Returns name, URL, state, target, git commit, and branch.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "deploymentId": { "type": "string", "description": "Vercel deployment ID" }
+          },
+          "required": ["deploymentId"]
+        }
+      },
+      {
+        "name": "vercel_list_domains",
+        "toolReferenceName": "vercel-domains",
+        "displayName": "List Vercel Domains",
+        "icon": "$(globe)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List your Vercel domains",
+        "modelDescription": "Lists all domains in the user's Vercel account with verification status and nameservers.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": { "type": "number", "description": "Max domains to return (default: 20)" }
+          }
+        }
+      },
+      {
+        "name": "vercel_list_env_vars",
+        "toolReferenceName": "vercel-env",
+        "displayName": "List Vercel Env Vars",
+        "icon": "$(symbol-variable)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List environment variables of a Vercel project",
+        "modelDescription": "Lists environment variables for a Vercel project. Shows keys and targets but NOT values (for security). Use to check what env vars are configured.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectName": { "type": "string", "description": "Vercel project name" }
+          },
+          "required": ["projectName"]
+        }
       }
     ]
   }
