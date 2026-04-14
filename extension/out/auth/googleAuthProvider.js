@@ -41,55 +41,129 @@ const url = __importStar(require("url"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const os = __importStar(require("os"));
-// Shared token file at ~/.copilot-gmail/token.json
-// Shared across ALL VS Code windows and the Python CLI.
-function getGlobalTokenPath() {
-    const dir = path.join(os.homedir(), '.copilot-gmail');
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+// ── Multi-account storage ───────────────────────────────────
+// ~/.copilot-gmail/
+//   accounts/           ← one JSON per account
+//     personal.json     ← { access_token, refresh_token, email, label, ... }
+//     work.json
+//     client.json
+//   active.txt          ← current label, e.g. "personal"
+//   token.json          ← legacy single-account (still written for Python CLI compat)
+const BASE_DIR = path.join(os.homedir(), '.copilot-gmail');
+const ACCOUNTS_DIR = path.join(BASE_DIR, 'accounts');
+const ACTIVE_FILE = path.join(BASE_DIR, 'active.txt');
+const LEGACY_TOKEN = path.join(BASE_DIR, 'token.json');
+function ensureDirs() {
+    if (!fs.existsSync(ACCOUNTS_DIR)) {
+        fs.mkdirSync(ACCOUNTS_DIR, { recursive: true });
     }
-    return path.join(dir, 'token.json');
 }
-const GLOBAL_TOKEN_PATH = getGlobalTokenPath();
-function readTokenFile() {
-    if (fs.existsSync(GLOBAL_TOKEN_PATH)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(GLOBAL_TOKEN_PATH, 'utf-8'));
-            if (data.refresh_token) {
-                return data;
-            }
-        }
-        catch { /* ignore */ }
+function accountPath(label) {
+    // Sanitize label for filesystem
+    const safe = label.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    return path.join(ACCOUNTS_DIR, `${safe}.json`);
+}
+function readAccount(label) {
+    const p = accountPath(label);
+    if (!fs.existsSync(p)) {
+        return undefined;
     }
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders) {
-        const wsPath = path.join(workspaceFolders[0].uri.fsPath, 'tools', '.gmail_token.json');
-        if (fs.existsSync(wsPath)) {
+    try {
+        const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
+        if (data.refresh_token) {
+            return { ...data, label };
+        }
+    }
+    catch { /* ignore */ }
+    return undefined;
+}
+function writeAccount(data) {
+    ensureDirs();
+    data.saved_at = Date.now();
+    const json = JSON.stringify(data);
+    fs.writeFileSync(accountPath(data.label), json, 'utf-8');
+    // Also write legacy token.json for Python CLI compat (active account)
+    if (getActiveLabel() === data.label) {
+        fs.writeFileSync(LEGACY_TOKEN, json, 'utf-8');
+    }
+}
+function removeAccount(label) {
+    const p = accountPath(label);
+    try {
+        fs.unlinkSync(p);
+    }
+    catch { /* ok */ }
+    // If this was active, clear active
+    if (getActiveLabel() === label) {
+        const remaining = listAccountLabels();
+        if (remaining.length > 0) {
+            setActiveLabel(remaining[0]);
+        }
+        else {
             try {
-                const data = JSON.parse(fs.readFileSync(wsPath, 'utf-8'));
+                fs.unlinkSync(ACTIVE_FILE);
+            }
+            catch { /* ok */ }
+            try {
+                fs.unlinkSync(LEGACY_TOKEN);
+            }
+            catch { /* ok */ }
+        }
+    }
+}
+function listAccountLabels() {
+    ensureDirs();
+    try {
+        return fs.readdirSync(ACCOUNTS_DIR)
+            .filter(f => f.endsWith('.json'))
+            .map(f => f.replace('.json', ''));
+    }
+    catch {
+        return [];
+    }
+}
+function getActiveLabel() {
+    try {
+        return fs.readFileSync(ACTIVE_FILE, 'utf-8').trim();
+    }
+    catch {
+        return '';
+    }
+}
+function setActiveLabel(label) {
+    ensureDirs();
+    fs.writeFileSync(ACTIVE_FILE, label, 'utf-8');
+    // Sync legacy token.json
+    const data = readAccount(label);
+    if (data) {
+        fs.writeFileSync(LEGACY_TOKEN, JSON.stringify(data), 'utf-8');
+    }
+}
+function getActiveAccount() {
+    const label = getActiveLabel();
+    if (!label) {
+        // Fallback: pick first available
+        const labels = listAccountLabels();
+        if (labels.length > 0) {
+            setActiveLabel(labels[0]);
+            return readAccount(labels[0]);
+        }
+        // Legacy migration: if token.json exists but no accounts, migrate it
+        if (fs.existsSync(LEGACY_TOKEN)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(LEGACY_TOKEN, 'utf-8'));
                 if (data.refresh_token) {
-                    return data;
+                    const migrated = { ...data, label: 'personal' };
+                    writeAccount(migrated);
+                    setActiveLabel('personal');
+                    return migrated;
                 }
             }
             catch { /* ignore */ }
         }
+        return undefined;
     }
-    return undefined;
-}
-function writeTokenFile(data) {
-    data.saved_at = Date.now();
-    const json = JSON.stringify(data);
-    fs.writeFileSync(GLOBAL_TOKEN_PATH, json, 'utf-8');
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders) {
-        const wsDir = path.join(workspaceFolders[0].uri.fsPath, 'tools');
-        if (fs.existsSync(wsDir)) {
-            try {
-                fs.writeFileSync(path.join(wsDir, '.gmail_token.json'), json, 'utf-8');
-            }
-            catch { /* ignore */ }
-        }
-    }
+    return readAccount(label);
 }
 function isExpired(data) {
     if (!data.saved_at || !data.expires_in) {
@@ -97,6 +171,7 @@ function isExpired(data) {
     }
     return Date.now() >= data.saved_at + (data.expires_in * 1000) - 120_000;
 }
+// ── Public API ──────────────────────────────────────────────
 class GoogleAuthProvider {
     _context;
     static id = 'google-gmail';
@@ -114,52 +189,56 @@ class GoogleAuthProvider {
         this._context = _context;
         this._tryRestore();
     }
-    _tryRestore() {
-        const data = readTokenFile();
-        if (data?.access_token) {
-            this._sessions = [this._makeSession(data)];
-            this._onDidChangeSessions.fire({ added: this._sessions, removed: [], changed: [] });
-        }
-    }
-    _makeSession(data) {
-        return {
-            id: 'gmail-shared',
-            accessToken: data.access_token,
-            account: { id: data.email || 'gmail', label: data.email || 'Gmail' },
-            scopes: [...GoogleAuthProvider.scopes],
-        };
-    }
-    async getSessions(_scopes) {
-        return this._sessions;
-    }
-    async createSession(scopes) {
+    // ── Multi-account public methods ────────────────────────
+    /** Add a new Gmail account with a label. Opens OAuth flow. */
+    async addAccount(label) {
         const { clientId, clientSecret } = this._getClientCreds();
-        const { code, redirectUri } = await this._startOAuthFlow(clientId, scopes);
+        const { code, redirectUri } = await this._startOAuthFlow(clientId, GoogleAuthProvider.scopes);
         const tokens = await this._exchangeCode(clientId, clientSecret, code, redirectUri);
         const userInfo = await this._fetchUserInfo(tokens.access_token);
-        const tokenData = {
+        const account = {
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             expires_in: tokens.expires_in || 3599,
             email: userInfo.email,
+            label,
         };
-        writeTokenFile(tokenData);
-        const session = this._makeSession(tokenData);
-        this._sessions = [session];
-        this._onDidChangeSessions.fire({ added: [session], removed: [], changed: [] });
-        return session;
+        writeAccount(account);
+        setActiveLabel(label);
+        this._rebuildSessions();
+        return account;
     }
-    async removeSession(_sessionId) {
-        const removed = [...this._sessions];
-        this._sessions = [];
-        try {
-            fs.unlinkSync(GLOBAL_TOKEN_PATH);
+    /** Switch active account by label. */
+    switchAccount(label) {
+        const data = readAccount(label);
+        if (data) {
+            setActiveLabel(label);
+            this._rebuildSessions();
         }
-        catch { /* ok */ }
-        this._onDidChangeSessions.fire({ added: [], removed, changed: [] });
+        return data;
     }
-    async getAccessToken() {
-        const data = readTokenFile();
+    /** Remove an account by label. */
+    removeAccountByLabel(label) {
+        removeAccount(label);
+        this._rebuildSessions();
+    }
+    /** Get all connected account labels with emails. */
+    listAccounts() {
+        const active = getActiveLabel();
+        return listAccountLabels().map(label => {
+            const data = readAccount(label);
+            return { label, email: data?.email || '?', active: label === active };
+        });
+    }
+    /** Get the active account label. */
+    getActiveAccountLabel() { return getActiveLabel(); }
+    /** Get an access token for a specific account (by label). If no label, uses active. */
+    async getAccessTokenFor(label) {
+        const targetLabel = label || getActiveLabel();
+        if (!targetLabel) {
+            return undefined;
+        }
+        const data = readAccount(targetLabel);
         if (!data?.refresh_token) {
             return undefined;
         }
@@ -174,15 +253,71 @@ class GoogleAuthProvider {
             if (fresh.refresh_token) {
                 data.refresh_token = fresh.refresh_token;
             }
-            writeTokenFile(data);
-            const session = this._makeSession(data);
-            this._sessions = [session];
-            this._onDidChangeSessions.fire({ added: [], removed: [], changed: [session] });
+            writeAccount(data);
+            this._rebuildSessions();
             return fresh.access_token;
         }
         catch {
             return undefined;
         }
+    }
+    // ── AuthenticationProvider interface ─────────────────────
+    _tryRestore() {
+        ensureDirs();
+        const data = getActiveAccount();
+        if (data?.access_token) {
+            this._sessions = [this._makeSession(data)];
+            this._onDidChangeSessions.fire({ added: this._sessions, removed: [], changed: [] });
+        }
+    }
+    _rebuildSessions() {
+        const old = [...this._sessions];
+        const data = getActiveAccount();
+        if (data?.access_token) {
+            this._sessions = [this._makeSession(data)];
+        }
+        else {
+            this._sessions = [];
+        }
+        this._onDidChangeSessions.fire({ added: this._sessions, removed: old, changed: [] });
+    }
+    _makeSession(data) {
+        const displayLabel = data.email ? `${data.label} (${data.email})` : data.label;
+        return {
+            id: `gmail-${data.label}`,
+            accessToken: data.access_token,
+            account: { id: data.email || data.label, label: displayLabel },
+            scopes: [...GoogleAuthProvider.scopes],
+        };
+    }
+    async getSessions(_scopes) {
+        return this._sessions;
+    }
+    async createSession(scopes) {
+        // Default: add as "personal" if no accounts, otherwise prompt
+        const existing = listAccountLabels();
+        const label = existing.length === 0 ? 'personal' : await this._promptLabel();
+        const account = await this.addAccount(label);
+        return this._makeSession(account);
+    }
+    async removeSession(_sessionId) {
+        const label = getActiveLabel();
+        if (label) {
+            removeAccount(label);
+        }
+        this._rebuildSessions();
+    }
+    async getAccessToken() {
+        return this.getAccessTokenFor();
+    }
+    // ── Internals ───────────────────────────────────────────
+    async _promptLabel() {
+        const input = await vscode.window.showInputBox({
+            prompt: 'Give this Gmail account a label (e.g. personal, work, client)',
+            placeHolder: 'work',
+            validateInput: v => v.trim().length > 0 ? null : 'Label cannot be empty',
+        });
+        return (input || 'account-' + Date.now()).trim().toLowerCase();
     }
     _getClientCreds() {
         const config = vscode.workspace.getConfiguration('gmailConnector');

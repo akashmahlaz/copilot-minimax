@@ -178,25 +178,93 @@
     ],
     "languageModelTools": [
       {
+        "name": "gmail_add_account",
+        "toolReferenceName": "gmail-add",
+        "displayName": "Add Gmail Account",
+        "icon": "$(add)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Add a new Gmail account",
+        "modelDescription": "Add a new Gmail account with a label (e.g. 'personal', 'work', 'client'). Opens browser for Google OAuth. After adding, this becomes the active account. The user can have multiple Gmail accounts and switch between them. Always ask the user what label they want for the account.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "label": { "type": "string", "description": "Label for this account (e.g. 'personal', 'work', 'client', 'company-name')" }
+          },
+          "required": ["label"]
+        }
+      },
+      {
+        "name": "gmail_list_accounts",
+        "toolReferenceName": "gmail-accounts",
+        "displayName": "List Gmail Accounts",
+        "icon": "$(accounts-view-bar-icon)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "List all connected Gmail accounts",
+        "modelDescription": "Lists all connected Gmail accounts with their labels, email addresses, and which one is active. Use when the user asks which accounts are connected or before switching accounts.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "gmail_switch_account",
+        "toolReferenceName": "gmail-switch",
+        "displayName": "Switch Gmail Account",
+        "icon": "$(arrow-swap)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Switch active Gmail account",
+        "modelDescription": "Switch the active Gmail account by label. All subsequent Gmail operations will use this account. Use when user says 'check my work email', 'switch to client account', etc. Call gmail_list_accounts first if you don't know available labels.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "label": { "type": "string", "description": "Account label to switch to (e.g. 'personal', 'work')" }
+          },
+          "required": ["label"]
+        }
+      },
+      {
+        "name": "gmail_remove_account",
+        "toolReferenceName": "gmail-remove",
+        "displayName": "Remove Gmail Account",
+        "icon": "$(trash)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Remove a connected Gmail account",
+        "modelDescription": "Removes a connected Gmail account by label and deletes its stored token. Confirm with user before removing. If this was the active account, switches to another available account.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "label": { "type": "string", "description": "Account label to remove" }
+          },
+          "required": ["label"]
+        }
+      },
+      {
+        "name": "gmail_connection_status",
+        "toolReferenceName": "gmail-status",
+        "displayName": "Gmail Status",
+        "icon": "$(info)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Check Gmail connection status",
+        "modelDescription": "Shows all connected Gmail accounts and which is active. Use when user asks about connection status, which accounts are connected, or which email is being used.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
         "name": "gmail_check_inbox",
         "toolReferenceName": "gmail-inbox",
         "displayName": "Check Gmail Inbox",
         "icon": "$(mail)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Check your Gmail inbox for recent emails",
-        "modelDescription": "Fetches the user's recent Gmail inbox emails. Returns subject, sender, date, snippet, and message ID for each email. Call this when the user wants to check their email, see what's new, or view their inbox.",
+        "modelDescription": "Fetches recent Gmail inbox emails. Returns subject, sender, date, snippet, and message ID. Uses the active account unless 'account' parameter specifies a different label (e.g. 'work', 'client'). If user says 'check my work email', set account to 'work'.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "maxResults": {
-              "type": "number",
-              "description": "Maximum number of emails to return (default: 15)",
-              "default": 15
-            },
-            "query": {
-              "type": "string",
-              "description": "Optional Gmail search query to filter results (e.g. 'is:unread', 'from:john')"
-            }
+            "maxResults": { "type": "number", "description": "Maximum emails to return (default: 15)" },
+            "query": { "type": "string", "description": "Optional Gmail search query (e.g. 'is:unread', 'from:john')" },
+            "account": { "type": "string", "description": "Account label to use (e.g. 'personal', 'work'). Omit to use active account." }
           }
         }
       },
@@ -207,19 +275,13 @@
         "icon": "$(search)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Search your Gmail for specific emails",
-        "modelDescription": "Searches the user's Gmail using Gmail search syntax. Supports queries like 'from:user@example.com', 'subject:meeting', 'is:unread', 'has:attachment', 'after:2025/01/01'. Returns matching emails with subject, sender, date, snippet, and ID.",
+        "modelDescription": "Searches Gmail using Gmail search syntax. Supports 'from:', 'subject:', 'is:unread', 'has:attachment', 'after:2025/01/01'. Uses active account unless 'account' param specifies a label.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "query": {
-              "type": "string",
-              "description": "Gmail search query (e.g. 'from:boss subject:urgent', 'is:unread has:attachment')"
-            },
-            "maxResults": {
-              "type": "number",
-              "description": "Maximum results to return (default: 10)",
-              "default": 10
-            }
+            "query": { "type": "string", "description": "Gmail search query" },
+            "maxResults": { "type": "number", "description": "Max results (default: 10)" },
+            "account": { "type": "string", "description": "Account label to use. Omit for active account." }
           },
           "required": ["query"]
         }
@@ -231,14 +293,12 @@
         "icon": "$(file-text)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Read the full content of a Gmail message",
-        "modelDescription": "Reads the full content of a specific Gmail message by ID. Returns the complete email including from, to, date, subject, body text, and labels. Use this after listing emails to read a specific one the user is interested in.",
+        "modelDescription": "Reads full email content by message ID. Returns from, to, date, subject, body, labels. Uses active account unless specified.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "messageId": {
-              "type": "string",
-              "description": "The Gmail message ID to read"
-            }
+            "messageId": { "type": "string", "description": "Gmail message ID" },
+            "account": { "type": "string", "description": "Account label. Omit for active account." }
           },
           "required": ["messageId"]
         }
@@ -250,22 +310,14 @@
         "icon": "$(send)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Send an email from your Gmail",
-        "modelDescription": "Sends a new email from the user's Gmail account. Requires recipient (to), subject, and body. Always confirm with the user before sending.",
+        "modelDescription": "Sends a new email. Requires to, subject, body. Always confirm with user before sending. Uses active account unless specified.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "to": {
-              "type": "string",
-              "description": "Recipient email address"
-            },
-            "subject": {
-              "type": "string",
-              "description": "Email subject line"
-            },
-            "body": {
-              "type": "string",
-              "description": "Email body text"
-            }
+            "to": { "type": "string", "description": "Recipient email address" },
+            "subject": { "type": "string", "description": "Email subject" },
+            "body": { "type": "string", "description": "Email body text" },
+            "account": { "type": "string", "description": "Account label to send from. Omit for active account." }
           },
           "required": ["to", "subject", "body"]
         }
@@ -277,18 +329,13 @@
         "icon": "$(reply)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Reply to a Gmail message",
-        "modelDescription": "Replies to an existing Gmail message in its thread. Requires the original message ID and the reply body text. Always confirm with the user before sending the reply.",
+        "modelDescription": "Replies to an existing Gmail message. Requires messageId and body. Confirm with user before sending.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "messageId": {
-              "type": "string",
-              "description": "The Gmail message ID to reply to"
-            },
-            "body": {
-              "type": "string",
-              "description": "Reply body text"
-            }
+            "messageId": { "type": "string", "description": "Message ID to reply to" },
+            "body": { "type": "string", "description": "Reply body text" },
+            "account": { "type": "string", "description": "Account label. Omit for active account." }
           },
           "required": ["messageId", "body"]
         }
@@ -300,49 +347,12 @@
         "icon": "$(tag)",
         "canBeReferencedInPrompt": true,
         "userDescription": "List your Gmail labels and folders",
-        "modelDescription": "Lists all Gmail labels (folders) for the user's account, including system labels (INBOX, SENT, etc.) and custom user labels.",
+        "modelDescription": "Lists all Gmail labels (folders) including system and custom labels.",
         "inputSchema": {
           "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "gmail_connect_account",
-        "toolReferenceName": "gmail-connect",
-        "displayName": "Connect Gmail",
-        "icon": "$(plug)",
-        "canBeReferencedInPrompt": true,
-        "userDescription": "Connect a Gmail account",
-        "modelDescription": "Connect a Gmail account via Google OAuth. Triggers the browser-based OAuth flow. Use when the user wants to connect, add, or sign in to their Gmail.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "gmail_disconnect_account",
-        "toolReferenceName": "gmail-disconnect",
-        "displayName": "Disconnect Gmail",
-        "icon": "$(debug-disconnect)",
-        "canBeReferencedInPrompt": true,
-        "userDescription": "Disconnect your Gmail account",
-        "modelDescription": "Disconnects the current Gmail account and removes the stored token. Use when the user wants to sign out, disconnect, or remove their Gmail.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "gmail_connection_status",
-        "toolReferenceName": "gmail-status",
-        "displayName": "Gmail Status",
-        "icon": "$(info)",
-        "canBeReferencedInPrompt": true,
-        "userDescription": "Check Gmail connection status",
-        "modelDescription": "Check whether Gmail is connected and which account is active. Use when user asks about connection status or which account is connected.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
+          "properties": {
+            "account": { "type": "string", "description": "Account label. Omit for active account." }
+          }
         }
       },
       {
