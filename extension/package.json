@@ -750,7 +750,7 @@
         "icon": "$(lightbulb)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Save a fact or preference to persistent memory",
-        "modelDescription": "Save a fact, preference, or lesson to persistent memory that survives across ALL sessions and VS Code windows. Use this PROACTIVELY when you learn: user preferences ('I prefer TypeScript'), environment facts ('runs macOS, has Docker'), project conventions ('uses tabs, 120-char lines'), corrections ('don't use sudo for Docker'), completed work ('migrated DB on 2026-01-15'). Two targets: 'memory' for agent notes (environment, conventions, lessons) and 'user' for user profile (name, preferences, communication style). Memory is injected into every conversation — keep entries concise and information-dense.",
+        "modelDescription": "Save durable information to persistent memory that survives across ALL sessions and VS Code windows. Memory is injected into every future turn, so keep entries compact and focused on facts that will still matter later.\n\nWHEN TO SAVE (do this PROACTIVELY — don't wait to be asked):\n- User corrects you or says 'remember this' / 'don't do that again'\n- User shares a preference, habit, or personal detail (name, role, timezone, coding style)\n- You discover something about the environment (OS, installed tools, project structure)\n- You learn a convention, API quirk, or workflow specific to this user's setup\n- You identify a stable fact that will be useful again in future sessions\n\nPRIORITY: User preferences and corrections > environment facts > procedural knowledge. The most valuable memory prevents the user from having to repeat themselves.\n\nDo NOT save task progress, session outcomes, or temporary TODO state to memory — use session_search to recall those from past transcripts.\n\nTWO TARGETS:\n- 'memory': your notes — environment facts, project conventions, tool quirks, lessons learned\n- 'user': who the user is — name, role, preferences, communication style, pet peeves\n\nSKIP: trivial/obvious info, things easily re-discovered, raw data dumps, and temporary task state.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -780,7 +780,7 @@
         "icon": "$(trash)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Remove an entry from persistent memory",
-        "modelDescription": "Remove a memory entry by providing a unique substring that identifies it. The substring must match exactly one entry. If it matches multiple, you'll be asked to be more specific. Use when information is outdated, wrong, or no longer relevant.",
+        "modelDescription": "Remove a memory entry by providing a unique substring that identifies it. The substring must match exactly one entry. If it matches multiple, you'll be asked to be more specific. Use when information is outdated, wrong, or no longer relevant. Prefer memory_replace over remove+add when updating information.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -810,7 +810,7 @@
         "icon": "$(edit)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Update an existing memory entry",
-        "modelDescription": "Replace an existing memory entry with updated content. Use old_text as a unique substring to find the entry, and content as the full replacement. Preferred over remove+add when updating information (e.g. user changed their preferred editor, project switched frameworks).",
+        "modelDescription": "Replace an existing memory entry with updated content. Use old_text as a unique substring to find the entry, and content as the full replacement. Preferred over remove+add when updating information (e.g. user changed their preferred editor, project switched frameworks). Use PROACTIVELY when you notice stored information is now outdated or the user has corrected something previously remembered.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -845,7 +845,7 @@
         "icon": "$(book)",
         "canBeReferencedInPrompt": true,
         "userDescription": "Show all persistent memory entries",
-        "modelDescription": "Lists all persistent memory entries with capacity usage. Shows both agent notes (MEMORY) and user profile (USER) by default, or filter by target. Use to check what's remembered before adding new entries, and to find entries for replacement or removal.",
+        "modelDescription": "Lists all persistent memory entries with capacity usage. Shows both agent notes (MEMORY) and user profile (USER) by default, or filter by target. Use to check what's remembered before adding new entries, and to find entries for replacement or removal. Call this at the start of conversations to recall what you know about the user.",
         "inputSchema": {
           "type": "object",
           "properties": {

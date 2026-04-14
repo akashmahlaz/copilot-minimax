@@ -41,7 +41,8 @@ Object.defineProperty(exports, "memorySnapshot", { enumerable: true, get: functi
 const sessionStore_1 = require("../session/sessionStore");
 // ── Helpers ─────────────────────────────────────────────────
 function textResult(text) {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    const snap = (0, memoryStore_1.memorySnapshot)();
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(snap + text)]);
 }
 function logged(toolName, fn) {
     return async (options, token) => {
@@ -55,6 +56,10 @@ function logged(toolName, fn) {
 function registerMemoryTools(context) {
     // ── memory_add ──────────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('memory_add', {
+        prepareInvocation(options, _token) {
+            const target = options.input?.target || 'memory';
+            return { invocationMessage: `Saving to ${target}…` };
+        },
         invoke: logged('memory_add', async (options, _token) => {
             const target = options.input?.target || 'memory';
             const content = options.input?.content;
@@ -70,6 +75,9 @@ function registerMemoryTools(context) {
     }));
     // ── memory_remove ───────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('memory_remove', {
+        prepareInvocation(_options, _token) {
+            return { invocationMessage: 'Removing memory entry…' };
+        },
         invoke: logged('memory_remove', async (options, _token) => {
             const target = options.input?.target || 'memory';
             const substring = options.input?.substring;
@@ -85,6 +93,9 @@ function registerMemoryTools(context) {
     }));
     // ── memory_replace ──────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('memory_replace', {
+        prepareInvocation(_options, _token) {
+            return { invocationMessage: 'Updating memory entry…' };
+        },
         invoke: logged('memory_replace', async (options, _token) => {
             const target = options.input?.target || 'memory';
             const oldText = options.input?.old_text;
@@ -101,6 +112,9 @@ function registerMemoryTools(context) {
     }));
     // ── memory_list ─────────────────────────────────────────
     context.subscriptions.push(vscode.lm.registerTool('memory_list', {
+        prepareInvocation(_options, _token) {
+            return { invocationMessage: 'Loading memory…' };
+        },
         invoke: logged('memory_list', async (options, _token) => {
             const target = options.input?.target;
             if (target && target !== 'memory' && target !== 'user') {

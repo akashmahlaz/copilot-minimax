@@ -21,7 +21,8 @@ export declare function memoryReplace(target: 'memory' | 'user', oldSubstring: s
 export declare function memoryList(target?: 'memory' | 'user'): string;
 /**
  * Returns a compact memory snapshot for injection into tool responses.
- * Only returns non-empty entries. Returns empty string if no memory exists.
+ * Includes proactive guidance when memory is empty or under-utilized,
+ * coaching the LLM to remember things about the user and environment.
  */
 export declare function memorySnapshot(): string;
 //# sourceMappingURL=memoryStore.d.ts.map

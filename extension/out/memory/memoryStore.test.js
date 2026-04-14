@@ -283,8 +283,11 @@ let memorySnapshot;
 });
 // ── memorySnapshot ──────────────────────────────────────────
 (0, vitest_1.describe)('memorySnapshot', () => {
-    (0, vitest_1.it)('returns empty string when no memory exists', () => {
-        (0, vitest_1.expect)(memorySnapshot()).toBe('');
+    (0, vitest_1.it)('returns proactive guidance when no memory exists', () => {
+        const snap = memorySnapshot();
+        (0, vitest_1.expect)(snap).toContain('PROACTIVELY');
+        (0, vitest_1.expect)(snap).toContain('memory_add');
+        (0, vitest_1.expect)(snap).toContain('💡');
     });
     (0, vitest_1.it)('returns formatted snapshot with memory entries', () => {
         memoryAdd('memory', 'User runs Windows');
@@ -308,6 +311,20 @@ let memorySnapshot;
         memoryAdd('memory', 'some content');
         const snap = memorySnapshot();
         (0, vitest_1.expect)(snap).toMatch(/\[\d+%\]/);
+    });
+    (0, vitest_1.it)('includes proactive nudge when memory is under-utilized', () => {
+        memoryAdd('memory', 'one small fact');
+        const snap = memorySnapshot();
+        (0, vitest_1.expect)(snap).toContain('💡');
+        (0, vitest_1.expect)(snap).toContain('PROACTIVELY');
+    });
+    (0, vitest_1.it)('omits nudge when memory is well-utilized', () => {
+        // Fill memory to >40%
+        memoryAdd('memory', 'x'.repeat(900));
+        // Fill user to >40%
+        memoryAdd('user', 'y'.repeat(560));
+        const snap = memorySnapshot();
+        (0, vitest_1.expect)(snap).not.toContain('💡');
     });
 });
 // ── Persistence ─────────────────────────────────────────────

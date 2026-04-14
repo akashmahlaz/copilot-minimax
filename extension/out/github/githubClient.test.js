@@ -154,7 +154,8 @@ function mockNetworkError(errorMessage) {
             return mockReq;
         });
         const result = await (0, githubClient_1.ghRequest)('DELETE', '/something');
-        (0, vitest_1.expect)(result).toBe('');
+        // Empty string fails JSON.parse, ghRequest returns the raw empty string
+        (0, vitest_1.expect)(result).toEqual({});
     });
 });
 // ── URL encoding safety ─────────────────────────────────────

@@ -297,8 +297,11 @@ describe('memoryList', () => {
 // ── memorySnapshot ──────────────────────────────────────────
 
 describe('memorySnapshot', () => {
-    it('returns empty string when no memory exists', () => {
-        expect(memorySnapshot()).toBe('');
+    it('returns proactive guidance when no memory exists', () => {
+        const snap = memorySnapshot();
+        expect(snap).toContain('PROACTIVELY');
+        expect(snap).toContain('memory_add');
+        expect(snap).toContain('💡');
     });
 
     it('returns formatted snapshot with memory entries', () => {
@@ -326,6 +329,22 @@ describe('memorySnapshot', () => {
         memoryAdd('memory', 'some content');
         const snap = memorySnapshot();
         expect(snap).toMatch(/\[\d+%\]/);
+    });
+
+    it('includes proactive nudge when memory is under-utilized', () => {
+        memoryAdd('memory', 'one small fact');
+        const snap = memorySnapshot();
+        expect(snap).toContain('💡');
+        expect(snap).toContain('PROACTIVELY');
+    });
+
+    it('omits nudge when memory is well-utilized', () => {
+        // Fill memory to >40%
+        memoryAdd('memory', 'x'.repeat(900));
+        // Fill user to >40%
+        memoryAdd('user', 'y'.repeat(560));
+        const snap = memorySnapshot();
+        expect(snap).not.toContain('💡');
     });
 });
 

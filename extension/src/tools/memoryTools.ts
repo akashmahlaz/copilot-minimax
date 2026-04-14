@@ -5,7 +5,8 @@ import { logToolCall } from '../session/sessionStore';
 // ── Helpers ─────────────────────────────────────────────────
 
 function textResult(text: string): vscode.LanguageModelToolResult {
-    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+    const snap = memorySnapshot();
+    return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(snap + text)]);
 }
 
 function logged<T>(toolName: string, fn: (options: vscode.LanguageModelToolInvocationOptions<T>, token: vscode.CancellationToken) => Promise<vscode.LanguageModelToolResult>) {
@@ -28,6 +29,10 @@ export function registerMemoryTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('memory_add', {
+            prepareInvocation(options: vscode.LanguageModelToolInvocationPrepareOptions<{ target: 'memory' | 'user'; content: string }>, _token) {
+                const target = options.input?.target || 'memory';
+                return { invocationMessage: `Saving to ${target}…` };
+            },
             invoke: logged<{
                 target: 'memory' | 'user';
                 content: string;
@@ -53,6 +58,9 @@ export function registerMemoryTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('memory_remove', {
+            prepareInvocation(_options, _token) {
+                return { invocationMessage: 'Removing memory entry…' };
+            },
             invoke: logged<{
                 target: 'memory' | 'user';
                 substring: string;
@@ -78,6 +86,9 @@ export function registerMemoryTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('memory_replace', {
+            prepareInvocation(_options, _token) {
+                return { invocationMessage: 'Updating memory entry…' };
+            },
             invoke: logged<{
                 target: 'memory' | 'user';
                 old_text: string;
@@ -105,6 +116,9 @@ export function registerMemoryTools(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.lm.registerTool('memory_list', {
+            prepareInvocation(_options, _token) {
+                return { invocationMessage: 'Loading memory…' };
+            },
             invoke: logged<{
                 target?: 'memory' | 'user';
             }>('memory_list', async (options, _token) => {

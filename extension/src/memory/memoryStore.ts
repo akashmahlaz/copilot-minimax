@@ -219,26 +219,55 @@ export function memoryList(target?: 'memory' | 'user'): string {
 
 /**
  * Returns a compact memory snapshot for injection into tool responses.
- * Only returns non-empty entries. Returns empty string if no memory exists.
+ * Includes proactive guidance when memory is empty or under-utilized,
+ * coaching the LLM to remember things about the user and environment.
  */
 export function memorySnapshot(): string {
     const store = load();
     const parts: string[] = [];
 
+    const memUsed = totalChars(store.memory);
+    const userUsed = totalChars(store.user);
+    const memPct = MEMORY_CHAR_LIMIT > 0 ? Math.round((memUsed / MEMORY_CHAR_LIMIT) * 100) : 0;
+    const userPct = USER_CHAR_LIMIT > 0 ? Math.round((userUsed / USER_CHAR_LIMIT) * 100) : 0;
+
     if (store.memory.length > 0) {
-        const used = totalChars(store.memory);
-        const pct = Math.round((used / MEMORY_CHAR_LIMIT) * 100);
         const lines = store.memory.map(e => e.content).join(' § ');
-        parts.push(`🧠 MEMORY [${pct}%]: ${lines}`);
+        parts.push(`🧠 MEMORY [${memPct}%]: ${lines}`);
     }
 
     if (store.user.length > 0) {
-        const used = totalChars(store.user);
-        const pct = Math.round((used / USER_CHAR_LIMIT) * 100);
         const lines = store.user.map(e => e.content).join(' § ');
-        parts.push(`👤 USER [${pct}%]: ${lines}`);
+        parts.push(`👤 USER [${userPct}%]: ${lines}`);
     }
 
-    if (parts.length === 0) { return ''; }
+    // Proactive guidance: nudge the LLM to remember things when memory is low
+    if (memPct < 40 || userPct < 40) {
+        const nudges: string[] = [];
+        if (userPct < 40) {
+            nudges.push(
+                'Memory is under-utilized. PROACTIVELY use memory_add when you learn: ' +
+                'user preferences, corrections ("don\'t do X"), personal details (name, role, timezone), ' +
+                'or communication style. The most valuable memory prevents the user from repeating themselves.'
+            );
+        }
+        if (memPct < 40) {
+            nudges.push(
+                'Save environment facts (OS, tools, project structure), conventions, and lessons learned ' +
+                'to memory target "memory". Keep entries concise and information-dense.'
+            );
+        }
+        parts.push(`💡 ${nudges.join(' ')}`);
+    }
+
+    if (parts.length === 0) {
+        return (
+            '💡 Memory is empty. PROACTIVELY use memory_add to save things you learn about the user ' +
+            '(preferences, corrections, personal details → target "user") and environment ' +
+            '(OS, tools, project structure, conventions → target "memory"). ' +
+            'Don\'t wait to be asked — the best memory prevents the user from repeating themselves.\n\n---\n\n'
+        );
+    }
+
     return parts.join('\n') + '\n\n---\n\n';
 }
