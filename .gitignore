@@ -4,6 +4,24 @@ __pycache__/
 dist/
 *.egg-info/
 .venv/
+node_modules/
 hermes-agent
 hermes-agent/
 openclaw
+extensions/node_modules
+copilot-minimax/node_modules
+extension/node_modules/
+
+# MCP servers
+mcp-servers/*/dist/
+mcp-servers/*/node_modules/
+
+# WhatsApp extension files kept local only
+extension/src/whatsapp/
+extension/src/chat/whatsappParticipant.ts
+extension/out/whatsapp/
+extension/out/chat/whatsappParticipant.*
+
+# Hook state
+.tool-counter
+
