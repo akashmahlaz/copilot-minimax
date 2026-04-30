@@ -9,11 +9,9 @@ import { registerVercelTools } from './tools/vercelTools';
 import { registerMemoryTools } from './tools/memoryTools';
 import { registerSessionTools } from './tools/sessionTools';
 import { registerGithubTools } from './tools/githubTools';
-import { WhatsAppBridge } from './whatsapp/whatsappBridge';
-import { WhatsAppStatusBar } from './whatsapp/whatsappStatusBar';
-import { registerWhatsAppTools } from './tools/whatsappTools';
-import { registerWhatsAppParticipant } from './chat/whatsappParticipant';
-import { connectWhatsApp, getClient as getWhatsAppClient, disconnect as disconnectWhatsApp } from './whatsapp/baileysClient';
+import { TelegramBridge } from './telegram/telegramBridge';
+import { registerTelegramTools } from './tools/telegramTools';
+import { closeDb } from './session/sessionStore';
 
 let gmailClient: GmailClient | undefined;
 
@@ -133,49 +131,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerSessionTools(context);
     registerGithubTools(context);
 
-    // ── WhatsApp (Baileys) ──────────────────────────────────
+    // ── Telegram Bridge ─────────────────────────────────────
+    // Polls Telegram Bot API for incoming messages, forwards to Copilot LLM,
+    // and sends responses back to Telegram.
 
-    // Cast to bypass TypeScript module resolution quirk with the async function type
-    type ConnectFn = (ctx: vscode.ExtensionContext) => Promise<import('./whatsapp/baileysClient').WhatsAppClient>;
-    const waClient = await (connectWhatsApp as ConnectFn)(context);
-    const waBridge = new WhatsAppBridge();
-    waBridge.setClient(waClient);
-    waBridge.start();
+    const telegramBridge = new TelegramBridge();
+    context.subscriptions.push(telegramBridge);
+    telegramBridge.start().catch(e => {
+        console.error('[TelegramBridge] Failed to start:', e);
+    });
 
-    const waStatusBar = new WhatsAppStatusBar(waClient);
-    waStatusBar.show();
-
-    registerWhatsAppTools(context, waClient);
-    registerWhatsAppParticipant(context, waClient, waStatusBar);
-
-    // Status bar click → open panel
-    context.subscriptions.push(
-        vscode.commands.registerCommand('whatsapp-connector.connect', async () => {
-            waStatusBar.openPanel();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('whatsapp-connector.disconnect', async () => {
-            await disconnectWhatsApp();
-            vscode.window.showInformationMessage('WhatsApp disconnected.');
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('whatsapp-connector.status', async () => {
-            const client = getWhatsAppClient();
-            const s = client?.getStatus() ?? 'disconnected';
-            const jid = client?.getOwnJid();
-            if (s === 'connected') {
-                vscode.window.showInformationMessage(`WhatsApp: Connected as ${jid}`);
-            } else if (s === 'connecting') {
-                vscode.window.showInformationMessage('WhatsApp: Connecting…');
-            } else {
-                vscode.window.showInformationMessage('WhatsApp: Disconnected — click the ⚡ status bar item to connect.');
-            }
-        })
-    );
+    // Register Telegram tools (needs bridge reference for status)
+    registerTelegramTools(context, telegramBridge);
 
     // ── Status Bar: Active Gmail Account ────────────────────
 
@@ -271,8 +238,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
+    closeDb();
     gmailClient = undefined;
-    disconnectWhatsApp().catch(() => { /* ignore */ });
 }
 
 // ── Email Webview Renderer ──────────────────────────────────

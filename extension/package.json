@@ -13,8 +13,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onView:gmail-inbox",
-    "onChatParticipant:copilot-gmail-connector.gmail",
-    "onChatParticipant:copilot-whatsapp-connector.whatsapp"
+    "onChatParticipant:copilot-gmail-connector.gmail"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -25,6 +24,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.93.0",
     "typescript": "^5.5.0",
@@ -69,10 +69,15 @@
           "default": "",
           "description": "GitHub personal access token (from github.com/settings/tokens — needs repo, read:org scopes)"
         },
-        "whatsappConnector.allowedNumbers": {
+        "telegramConnector.botToken": {
+          "type": "string",
+          "default": "",
+          "description": "Telegram Bot Token (from @BotFather). When set, the Telegram bridge automatically starts polling for messages."
+        },
+        "telegramConnector.allowedChatIds": {
           "type": "array",
           "default": [],
-          "description": "WhatsApp numbers (JIDs) authorized to control Copilot (e.g. ['919876543210@s.whatsapp.net']). Empty = only the linked device's own number."
+          "description": "Telegram chat IDs allowed to interact with Copilot. Empty = allow all chats."
         }
       }
     },
@@ -82,11 +87,6 @@
           "id": "gmail-connector",
           "title": "Gmail",
           "icon": "media/gmail-icon.svg"
-        },
-        {
-          "id": "whatsapp-connector",
-          "title": "WhatsApp",
-          "icon": "media/whatsapp-icon.svg"
         }
       ]
     },
@@ -96,22 +96,12 @@
           "id": "gmail-inbox",
           "name": "Inbox"
         }
-      ],
-      "whatsapp-connector": [
-        {
-          "id": "whatsapp-status",
-          "name": "Status"
-        }
       ]
     },
     "viewsWelcome": [
       {
         "view": "gmail-inbox",
         "contents": "Connect your Gmail account to browse, search and manage emails right from VS Code.\n[Connect Gmail](command:gmail-connector.connect)\n\nYou need a Google Cloud OAuth Client ID.\nSee [Setup Guide](command:gmail-connector.openSetup) for instructions."
-      },
-      {
-        "view": "whatsapp-status",
-        "contents": "Connect your WhatsApp to chat with Copilot from your phone.\n[Connect WhatsApp](command:whatsapp-connector.connect)\n\nClick the ⚡ status bar item (bottom-right) to open the QR scanner."
       }
     ],
     "commands": [
@@ -147,22 +137,6 @@
         "command": "gmail-connector.openSetup",
         "title": "Open Setup Guide",
         "category": "Gmail"
-      },
-      {
-        "command": "whatsapp-connector.connect",
-        "title": "Connect WhatsApp",
-        "category": "WhatsApp",
-        "icon": "$(zap)"
-      },
-      {
-        "command": "whatsapp-connector.disconnect",
-        "title": "Disconnect WhatsApp",
-        "category": "WhatsApp"
-      },
-      {
-        "command": "whatsapp-connector.status",
-        "title": "WhatsApp Status",
-        "category": "WhatsApp"
       }
     ],
     "menus": {
@@ -217,27 +191,6 @@
           {
             "name": "labels",
             "description": "List your Gmail labels"
-          }
-        ]
-      },
-      {
-        "id": "copilot-whatsapp-connector.whatsapp",
-        "name": "whatsapp",
-        "fullName": "WhatsApp Assistant",
-        "description": "WhatsApp integration — connect, disconnect, and send messages via WhatsApp",
-        "isSticky": false,
-        "commands": [
-          {
-            "name": "status",
-            "description": "Show WhatsApp connection status"
-          },
-          {
-            "name": "connect",
-            "description": "Connect WhatsApp via QR code"
-          },
-          {
-            "name": "disconnect",
-            "description": "Disconnect WhatsApp session"
           }
         ]
       }
@@ -1309,39 +1262,38 @@
         }
       },
       {
-        "name": "whatsapp_send_message",
-        "toolReferenceName": "whatsapp-send",
-        "displayName": "Send WhatsApp Message",
-        "icon": "$(zap)",
+        "name": "telegram_setup",
+        "toolReferenceName": "telegram-setup",
+        "displayName": "Setup Telegram Bot",
+        "icon": "$(gear)",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Send a text message via WhatsApp",
-        "modelDescription": "Sends a WhatsApp text message to a JID. Use the user's own number or a known JID. Confirm with user before sending.",
+        "userDescription": "Configure or update the Telegram bot token",
+        "modelDescription": "Sets up the Telegram bot bridge. ALWAYS call this tool when user says 'setup telegram', 'configure telegram', 'connect telegram', or mentions a Telegram bot token. If user provides a token (looks like 123456:ABC...), pass it as botToken. If no token is provided, call this tool anyway with no parameters — it will check VS Code settings for an existing token and verify it. Also accepts optional allowedChatIds to restrict which Telegram chats can interact with Copilot.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "jid": {
+            "botToken": {
               "type": "string",
-              "description": "WhatsApp JID (e.g. 919876543210@s.whatsapp.net)"
+              "description": "Telegram Bot API token from @BotFather (format: 123456789:ABCdefGHI...). Optional — if omitted, checks VS Code settings for existing token."
             },
-            "text": {
-              "type": "string",
-              "description": "Message text"
+            "allowedChatIds": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "Optional list of Telegram chat IDs allowed to interact. Empty = allow all."
             }
-          },
-          "required": [
-            "jid",
-            "text"
-          ]
+          }
         }
       },
       {
-        "name": "whatsapp_get_status",
-        "toolReferenceName": "whatsapp-status",
-        "displayName": "WhatsApp Status",
+        "name": "telegram_status_check",
+        "toolReferenceName": "telegram-status",
+        "displayName": "Telegram Bot Status",
         "icon": "$(info)",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Check WhatsApp connection status",
-        "modelDescription": "Returns WhatsApp connection status and own JID.",
+        "userDescription": "Check if the Telegram bot is configured and connected",
+        "modelDescription": "Checks whether the Telegram bot token is configured and valid. Returns bot username and allowed chat IDs. Use when user asks 'is telegram set up?', 'check telegram status', or before suggesting the user configure Telegram.",
         "inputSchema": {
           "type": "object",
           "properties": {}
@@ -1350,6 +1302,6 @@
     ]
   },
   "dependencies": {
-    "baileys": "^7.0.0-rc.9"
-  },
+    "better-sqlite3": "11.9.1"
+  }
 }
