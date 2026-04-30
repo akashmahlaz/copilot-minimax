@@ -31,7 +31,10 @@ def cmd_status() -> None:
     if is_patched(content):
         n_minimax = content.count("api.minimax.io/anthropic")
         n_models = content.count("MiniMax-M2.7")
-        print(f"Status    : PATCHED (minimax refs: {n_minimax}, model refs: {n_models})")
+        if n_models:
+            print(f"Status    : PATCHED (minimax refs: {n_minimax}, model refs: {n_models})")
+        else:
+            print(f"Status    : PATCHED (minimax refs: {n_minimax}, model patch not applicable in this build)")
     elif "https://api.anthropic.com" in content:
         print("Status    : UNPATCHED (original Anthropic URLs)")
     else:

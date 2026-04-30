@@ -1,0 +1,7 @@
+{
+  "chat.agent.enabled": true,
+  "chat.agent.maxRequests": 50,
+  "chat.pluginLocations": {
+    "c:\\Users\\akash\\work\\copilot-minimax": true
+  }
+}

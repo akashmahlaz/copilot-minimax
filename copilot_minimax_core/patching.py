@@ -35,4 +35,4 @@ def patch_content(content: str) -> tuple[str, list[str]]:
 
 def is_patched(content: str) -> bool:
     """Check if extension.js already contains key MiniMax patch markers."""
-    return MINIMAX_URL in content and "MiniMax-M2.7" in content
+    return MINIMAX_URL in content and ANTHROPIC_URL not in content

@@ -1,0 +1,22 @@
+{
+  "name": "@copilot-minimax/whatsapp-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for WhatsApp — send messages, read chats, search conversations",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.12.1",
+    "baileys": "^7.0.0-rc.9",
+    "qrcode": "1.5.4",
+    "zod": "3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "@types/qrcode": "1.5.5",
+    "typescript": "5.8.3"
+  }
+}

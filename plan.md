@@ -3,257 +3,396 @@
 
 ## Complete Build Plan: copilot-minimax → "Hermes for Copilot"
 
-### Current State: **26 tools** (11 Gmail + 10 AWS + 5 Vercel) | **~2,033 lines** | **0% toward Hermes parity**
+### Architecture: Plugin-First, Editor-Agnostic
+
+**Key Insight**: VS Code Copilot has 7 native customization layers (Agents, Skills, Instructions, Hooks, MCP Servers, Prompts, Plugins) that obsolete most of our extension tool approach. The new plan uses:
+
+- **Agent Plugin** as the distribution format (bundles everything, installable from Git)
+- **Custom Agent** (`.agent.md`) for the `@minimax` persona with Hermes-level personality
+- **MCP Servers** for Gmail, AWS, Vercel, WhatsApp, Slack, Calendar (portable across editors)
+- **Skills** for specialized workflows (memory management, environment detection)
+- **Hooks** for lifecycle automation (memory injection, background review, onboarding)
+- **Instructions** for always-on coding standards and personalization
+- **VS Code Extension** only where VS Code APIs are required (memory storage, session DB, webview)
+
+**Why this matters**: MCP servers are portable. They work in Copilot, Claude Code, Cursor, Windsurf, and any future editor. This is the architecture for a custom code editor.
+
+### Current State: **Phase 1-8 COMPLETE** | **Agent + Hooks + Skills + Gmail + Calendar + AWS (5 servers) + GitHub + WhatsApp + Sessions MCP** | **14 custom + official AWS/GitHub MCP tools + 6 WhatsApp MCP tools + 3 Sessions MCP tools** | **83 tests passing** | **~72% toward Hermes parity**
 
 ---
 
-### Phase 1: Memory System
-**Goal**: Make Copilot remember things across sessions — the single biggest gap.
+### Phase 1: Memory System ✅ COMPLETE
+**Goal**: Make Copilot remember things across sessions.
 
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 1.1 | Create `~/.copilot-minimax/memory.json` with `MEMORY` entries (agent notes) and `USER` entries (user profile) | — |
-| 1.2 | Build `memory_add` tool — agent saves facts, preferences, corrections | `memory_add` |
-| 1.3 | Build `memory_remove` tool — substring match delete (Hermes pattern) | `memory_remove` |
-| 1.4 | Build `memory_replace` tool — update existing entries via substring match | `memory_replace` |
-| 1.5 | Build `memory_list` tool — show all memory entries with capacity % | `memory_list` |
-| 1.6 | Inject memory snapshot into EVERY tool response (like account context injection) | — |
-| 1.7 | Character limits: MEMORY 2,200 chars, USER 1,375 chars | — |
-| 1.8 | Duplicate prevention + basic injection scanning | — |
-| 1.9 | Register all 4 tools in package.json with `toolReferenceName` | — |
+| Task | Status |
+|------|--------|
+| `~/.copilot-minimax/memory.json` with MEMORY + USER entries | ✅ |
+| `memory_add` / `memory_remove` / `memory_replace` / `memory_list` tools | ✅ |
+| Memory snapshot injected into every tool response | ✅ |
+| Proactive nudges after 10+ turns without memory use | ✅ |
+| Character limits: MEMORY 2,200 / USER 1,375 | ✅ |
+| Duplicate prevention + injection scanning | ✅ |
+| 43 tests passing | ✅ |
+| VSIX deployed | ✅ |
 
 **Deliverables**: `src/tools/memoryTools.ts`, `src/memory/memoryStore.ts`
-**New files**: 2 | **New tools**: 4 | **Estimated lines**: ~300
+**Architecture**: VS Code Extension (needs filesystem + VS Code API)
 
 **After Phase 1: ~15% toward Hermes**
-> We have persistent memory that grows with the user. Copilot remembers your OS, project conventions, and preferences. Still missing: session search, skills, GitHub, Slack, Calendar, web, cron, browser. But the "dumb" feeling is gone.
 
 ---
 
-### Phase 2: Session Persistence + Search
+### Phase 2: Agent Plugin Scaffold ✅ COMPLETE
+**Goal**: Create the plugin structure that bundles everything we build.
+
+| Task | Status |
+|------|--------|
+| 2.1 Create `plugin.json` at repo root | ✅ |
+| 2.2 Create `.github/agents/minimax.agent.md` | ✅ |
+| 2.3 Agent YAML frontmatter: tools, model, handoffs | ✅ |
+| 2.4 Agent prompt: Hermes-inspired personality | ✅ |
+| 2.5 Create `.github/instructions/minimax-coding.instructions.md` | ✅ |
+| 2.6 Create `.github/prompts/` (deploy, review, debug) | ✅ |
+| 2.7 Register plugin locally via `chat.pluginLocations` | ⏳ |
+
+**Key files**:
+```
+.github/
+  agents/minimax.agent.md        # @minimax persona
+  instructions/minimax-coding.instructions.md
+  prompts/deploy.prompt.md
+  prompts/review.prompt.md
+  prompts/debug.prompt.md
+plugin.json                      # Plugin manifest
+```
+
+**After Phase 2: ~20%**
+> We have a real agent persona. `@minimax` is addressable in chat with personality, coding standards, and reusable prompts. No extension build needed — just files.
+
+---
+
+### Phase 3: Hooks — Lifecycle Automation ✅ COMPLETE
+**Goal**: Automate memory injection, onboarding, and background review via hooks.
+
+| Task | Status |
+|------|--------|
+| 3.1 `SessionStart` hook → memory snapshot + env detection | ✅ |
+| 3.2 `UserPromptSubmit` hook → first-run onboarding | 🔜 Phase 8 |
+| 3.3 `PostToolUse` hook → tool counter + memory nudges | ✅ |
+| 3.4 `PreCompact` hook → save context before compression | 🔜 Phase 7 |
+| 3.5 `Stop` hook → session logging + counter reset | ✅ |
+| 3.6 `PreToolUse` hook → destructive op confirmation gate | ✅ |
+
+**Key files**:
+```
+.github/hooks/
+  session-start.json       # Memory injection + env detection
+  user-prompt-submit.json  # First-run onboarding
+  post-tool-use.json       # Auto-save memories
+  pre-compact.json         # Save state before compression
+  stop.json                # Background memory review
+  pre-tool-use.json        # Destructive op confirmation
+```
+
+**Hermes parity targets**:
+- `SessionStart` replaces Hermes' frozen snapshot injection
+- `Stop` replaces Hermes' `_spawn_background_review()` daemon thread
+- `PreToolUse` replaces Hermes' confirmation system
+- `PostToolUse` replaces Hermes' memory nudge interval (every 10 turns)
+
+**After Phase 3: ~30%**
+> The agent now has a lifecycle. It wakes up with context, learns during use, confirms dangerous actions, and reviews itself before sleeping. This is the intelligence backbone.
+
+---
+
+### Phase 4: MCP Server — Gmail + Google Calendar ✅ COMPLETE
+**Goal**: Replace extension Gmail tools with a portable MCP server. Add Calendar.
+
+| Task | Status |
+|------|--------|
+| 4.1 Create `mcp-servers/google/` — TypeScript MCP server | ✅ |
+| 4.2 Google OAuth2 token reuse from `~/.copilot-gmail/accounts/` | ✅ |
+| 4.3 Gmail tools: connection_status, list_accounts, check_inbox, search, read, send, reply, labels | ✅ |
+| 4.4 Calendar tools: list_calendars, list_events, create, update, delete, check_availability | ✅ |
+| 4.5 Register in `.vscode/mcp.json` with input prompts for credentials | ✅ |
+| 4.6 Build succeeds, MCP initialize+tools/list verified | ✅ |
+| 4.7 Remove Gmail tools from VS Code extension `package.json` | ⏳ Phase 12 |
+
+**Key files**:
+```
+mcp-servers/google/
+  index.ts           # MCP server entry (stdio)
+  gmail.ts           # Gmail tool implementations
+  calendar.ts        # Calendar tool implementations
+  auth.ts            # Google OAuth2 shared auth
+  package.json
+.vscode/mcp.json     # MCP server registration
+```
+
+**Why MCP over extension tools**:
+- Works in any editor (Copilot, Claude Code, Cursor, future custom editor)
+- Sandboxable (restrict filesystem + network access)
+- Auto-approved in sandbox mode
+- No VS Code API dependency
+
+**After Phase 4: ~40%**
+> Gmail + Calendar via MCP. Portable. "When's my next meeting? Reply to that email from Sarah and schedule a follow-up."
+
+---
+
+### Phase 5: MCP Server — AWS ✅ COMPLETE
+**Goal**: Replace extension AWS tools with portable MCP server.
+
+| Task | Status |
+|------|--------|
+| 5.1 Use official `mcp-proxy-for-aws` (managed, in preview) | ✅ |
+| 5.2 Register in `.vscode/mcp.json` with AWS_PROFILE + AWS_REGION inputs | ✅ |
+| 5.3 Zero code needed — official AWS MCP covers S3, Lambda, EC2, CloudWatch + all AWS services | ✅ |
+| 5.4 Remove AWS tools from VS Code extension | ⏳ Phase 12 |
+
+**Note**: AWS already has an official MCP server at `github.com/awslabs/mcp`. We can either:
+- Use the official one directly (zero code needed, just add to `mcp.json`)
+- Build our own with opinionated defaults for the minimax experience
+
+**After Phase 5: ~48%**
+> AWS + Gmail + Calendar all portable via MCP. Extension is now just memory + sessions.
+
+---
+
+### Phase 6: MCP Server — Vercel + GitHub ✅ COMPLETE
+**Goal**: Replace remaining extension tools.
+
+| Task | Status |
+|------|--------|
+| 6.1 Use official `@modelcontextprotocol/server-github` | ✅ |
+| 6.2 Register in `.vscode/mcp.json` with GITHUB_PERSONAL_ACCESS_TOKEN input | ✅ |
+| 6.3 Create `mcp-servers/vercel/` if no adequate MCP exists | 🔜 Phase 12 |
+| 6.4 Remove GitHub tools from VS Code extension | ⏳ Phase 12 |
+
+**After Phase 6: ~55%**
+> ALL external service tools are now MCP servers. VS Code extension only does: memory, sessions, webview. Extension package.json drops from 40+ tools to ~7.
+
+---
+
+### Phase 7: Session Persistence + Search ✅ COMPLETE
 **Goal**: Store every conversation, search past sessions.
 
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 2.1 | Create SQLite DB at `~/.copilot-minimax/sessions.db` with FTS5 | — |
-| 2.2 | Auto-save every tool invocation and response to session table | — |
-| 2.3 | Build `session_search` tool — FTS5 search across all past conversations | `session_search` |
-| 2.4 | Build `session_list` tool — browse past sessions with timestamps | `session_list` |
-| 2.5 | Build `session_resume` tool — load context from a past session | `session_resume` |
-| 2.6 | Session lineage tracking (parent/child across compressions) | — |
-| 2.7 | Add `better-sqlite3` as dependency (zero-config, fast, FTS5 built-in) | — |
+| Task | Status |
+|------|--------|
+| 7.1 Create SQLite DB at `~/.copilot-minimax/sessions.db` with FTS5 | ✅ |
+| 7.2 Auto-save via `logToolCall` (every tool invocation recorded) | ✅ |
+| 7.3 `session_search` tool — FTS5 full-text search across all sessions | ✅ |
+| 7.4 `session_list` tool — browse past sessions ordered by recency | ✅ |
+| 7.5 `session_resume` tool — load full context + auto-set lineage | ✅ |
+| 7.6 Session lineage tracking via `setParentSession()` | ✅ |
+| 7.7 JSON → SQLite auto-migration on first run | ✅ |
+| 7.8 `closeDb()` cleanup in extension deactivate | ✅ |
+| 7.9 27 tests passing (FTS5 search, lineage, pruning, sanitization) | ✅ || 7.10 | Portable Sessions MCP server at `mcp-servers/sessions/` — any agent can search/list/resume | ✅ |
+**Key files**:
+```
+extension/src/session/sessionStore.ts     # SQLite + FTS5 store (better-sqlite3)
+extension/src/session/sessionStore.test.ts # 27 tests
+extension/src/tools/sessionTools.ts        # session_search, session_list, session_resume
+```
 
-**Deliverables**: `src/session/sessionStore.ts`, `src/tools/sessionTools.ts`
-**New files**: 2 | **New tools**: 3 | **Estimated lines**: ~400
-**New dependency**: `better-sqlite3`
+**Architecture**: VS Code Extension (`better-sqlite3` native module, WAL journal mode)
 
-**After Phase 2: ~25% toward Hermes**
-> Agent now has long-term memory AND searchable conversation history. "Did we discuss X last week?" works. Still missing everything else, but the intelligence foundation is solid.
-
----
-
-### Phase 3: GitHub Integration
-**Goal**: Deepest-value integration — Copilot users live in GitHub.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 3.1 | GitHub PAT auth via VS Code settings | — |
-| 3.2 | `github_list_repos` — user's repos with filters | `github_list_repos` |
-| 3.3 | `github_repo_info` — stars, issues, PRs, languages | `github_repo_info` |
-| 3.4 | `github_list_issues` — issues with state/label filters | `github_list_issues` |
-| 3.5 | `github_create_issue` — open new issue | `github_create_issue` |
-| 3.6 | `github_list_prs` — PRs with state/author filters | `github_list_prs` |
-| 3.7 | `github_pr_details` — diff, reviews, checks | `github_pr_details` |
-| 3.8 | `github_create_pr` — open new PR | `github_create_pr` |
-| 3.9 | `github_list_notifications` — unread notifications | `github_list_notifications` |
-| 3.10 | `github_list_branches` — branches with protection status | `github_list_branches` |
-
-**Deliverables**: `src/tools/githubTools.ts`, `src/github/githubClient.ts`
-**New files**: 2 | **New tools**: 9 | **Estimated lines**: ~500
-
-**After Phase 3: ~38% toward Hermes**
-> Now 35 active tools. Gmail + AWS + Vercel + GitHub + Memory + Sessions. Hermes doesn't have native GitHub like this — it relies on MCP server. This is our competitive edge.
+**After Phase 7: ~62%**
+> Searchable conversation history with FTS5 ranking. "Did we discuss the deployment pipeline last week?" works. Session lineage tracks context across compressions.
 
 ---
 
-### Phase 4: Web Search + Extract
-**Goal**: Let Copilot search the internet and read web pages.
+### Phase 8: Skills — Self-Improving Knowledge ✅ COMPLETE
+**Goal**: Agent creates reusable knowledge documents using Copilot's native skill format.
 
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 4.1 | `web_search` — DuckDuckGo HTML scrape (zero-API, free) | `web_search` |
-| 4.2 | `web_extract` — fetch and extract readable content from URL | `web_extract` |
-| 4.3 | Optional Firecrawl/Serper API key upgrade path via settings | — |
-| 4.4 | HTML → clean text extraction (strip tags, scripts, styles) | — |
+| Task | Description | Status |
+|------|-------------|--------|
+| 8.1 | Skills stored as native SKILL.md in `.github/skills/` | ✅ |
+| 8.2 | YAML frontmatter with name, description, argument-hint | ✅ |
+| 8.3 | `PostToolUse` hook detects 5+ tool chains → suggests skill creation | ✅ |
+| 8.4 | Skill creation prompt at `.github/prompts/create-skill.prompt.md` | ✅ |
+| 8.5 | 4 bundled skills: memory-management, session-continuity, service-orchestration, skill-creation | ✅ |
+| 8.6 | Agent prompt updated with skills awareness | ✅ |
 
-**Deliverables**: `src/tools/webTools.ts`, `src/web/webClient.ts`
-**New files**: 2 | **New tools**: 2 | **Estimated lines**: ~300
+**Key insight**: We don't need custom skill tools. Copilot's native skill system already does:
+- Progressive loading (Level 0: name/desc, Level 1: SKILL.md, Level 2: resources)
+- Automatic discovery from `~/.copilot/skills/` and `.github/skills/`
+- Works across VS Code, Copilot CLI, and cloud agent
 
-**After Phase 4: ~45% toward Hermes**
-> Agent can now research the web. "What's the latest on X?" works. Combined with memory, it can research → remember → recall. 37 tools total.
+We just need the **hook** that detects when to suggest skill creation, and the **agent prompt** that knows how to create well-structured SKILL.md files.
 
----
-
-### Phase 5: Slack Integration
-**Goal**: Read/send Slack messages from Copilot.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 5.1 | Slack Bot Token auth via VS Code settings | — |
-| 5.2 | `slack_list_channels` — public/private channels | `slack_list_channels` |
-| 5.3 | `slack_read_messages` — recent messages from channel | `slack_read_messages` |
-| 5.4 | `slack_send_message` — post to channel or DM | `slack_send_message` |
-| 5.5 | `slack_search_messages` — search across workspace | `slack_search_messages` |
-| 5.6 | `slack_list_users` — workspace members | `slack_list_users` |
-
-**Deliverables**: `src/tools/slackTools.ts`, `src/slack/slackClient.ts`
-**New files**: 2 | **New tools**: 5 | **Estimated lines**: ~350
-
-**After Phase 5: ~52% toward Hermes**
-> 42 tools. Gmail + Slack gives us 2 communication platforms. Hermes has 18 messaging platforms, but we cover the two most-used by developers with zero setup (inside VS Code).
+**After Phase 8: ~72%**
+> Self-improving agent. Skills + memory = the learning loop. Agent creates SKILL.md files that Copilot natively loads. No custom infrastructure needed.
 
 ---
 
-### Phase 6: Google Calendar
-**Goal**: Scheduling and availability from Copilot.
+### Phase 9: MCP Servers — Slack + WhatsApp ✅ PARTIAL (WhatsApp done)
+**Goal**: Messaging platforms via portable MCP servers.
 
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 6.1 | Reuse existing Google OAuth (add calendar scopes) | — |
-| 6.2 | `calendar_list_events` — upcoming events with date range | `calendar_list_events` |
-| 6.3 | `calendar_create_event` — create event with attendees | `calendar_create_event` |
-| 6.4 | `calendar_check_availability` — free/busy lookup | `calendar_check_availability` |
-| 6.5 | `calendar_update_event` — modify existing event | `calendar_update_event` |
-| 6.6 | `calendar_delete_event` — remove event | `calendar_delete_event` |
+| Task | Description | Status |
+|------|-------------|--------|
+| 9.1 | Create `mcp-servers/slack/` — Slack Bot Token based | 🔜 |
+| 9.2 | Slack tools: `list_channels`, `read_messages`, `send_message`, `search_messages`, `list_users` | 🔜 |
+| 9.3 | Create `mcp-servers/whatsapp/` — Baileys-based, 6 tools, QR auth, in-memory message buffer | ✅ |
+| 9.4 | WhatsApp tools: status, connect, send_message, read_messages, list_chats, search_messages | ✅ |
+| 9.7 | Fix Baileys 405: version override `[2, 3000, 1034074495]`, recursive logger mock, ASCII QR | ✅ |
+| 9.5 | Sessions MCP server also created for portability | ✅ |
+| 9.6 | AWS expanded to 5 servers: managed remote + admin + IAM + CloudWatch + CloudFormation | ✅ |
 
-**Deliverables**: `src/tools/calendarTools.ts`, `src/calendar/calendarClient.ts`
-**New files**: 2 | **New tools**: 5 | **Estimated lines**: ~350
+**Existing MCP servers found**:
+- **WhatsApp Business** (official, by Wassenger): send messages, manage conversations, templates
+- **WhatsApp MCP** (community, by lharries): personal WhatsApp, individuals, groups, search
+- **Slack** (community, by korotovsky): most powerful Slack MCP, stdio + SSE, no bot approval needed
+- **Slack** (community, by zencoderai): stdio + Streamable HTTP
 
-**After Phase 6: ~60% toward Hermes**
-> 47 tools — **matching Hermes' 47 built-in tools count**. Calendar reuses our Google OAuth, making it almost free to build. "When's my next meeting?" and "Schedule a standup" just work.
-
----
-
-### Phase 7: Skills System
-**Goal**: Agent creates reusable knowledge documents from experience.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 7.1 | Skills directory at `~/.copilot-minimax/skills/` with SKILL.md format | — |
-| 7.2 | `skill_list` — progressive disclosure (name + description only) | `skill_list` |
-| 7.3 | `skill_view` — load full skill content | `skill_view` |
-| 7.4 | `skill_create` — agent saves new skill from experience | `skill_create` |
-| 7.5 | `skill_update` — agent patches existing skill | `skill_update` |
-| 7.6 | `skill_delete` — remove skill | `skill_delete` |
-| 7.7 | Inject skill index into system prompt (Level 0 only, ~3k tokens) | — |
-| 7.8 | Auto-suggest skill creation after 5+ tool call chains | — |
-
-**Deliverables**: `src/tools/skillTools.ts`, `src/skills/skillStore.ts`
-**New files**: 2 | **New tools**: 5 | **Estimated lines**: ~400
-
-**After Phase 7: ~70% toward Hermes**
-> 52 tools. Self-improving skills + memory = the learning loop. Agent gets smarter with use. This is the inflection point — our extension now has genuine intelligence beyond simple API wrappers.
+**After Phase 9: ~80%**
+> Gmail + Slack + WhatsApp + Calendar. Three messaging platforms + scheduling. All portable via MCP.
 
 ---
 
-### Phase 8: Cron / Scheduled Tasks
-**Goal**: Automated recurring tasks with notification delivery.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 8.1 | Cron store at `~/.copilot-minimax/cron/jobs.json` | — |
-| 8.2 | `cron_create` — schedule recurring task | `cron_create` |
-| 8.3 | `cron_list` — list all jobs with next run time | `cron_list` |
-| 8.4 | `cron_update` — modify schedule or task | `cron_update` |
-| 8.5 | `cron_delete` — remove job | `cron_delete` |
-| 8.6 | `cron_pause` / `cron_resume` — toggle active state | `cron_pause`, `cron_resume` |
-| 8.7 | Background timer that runs jobs via extension activation | — |
-| 8.8 | Deliver results via Slack/Gmail/VS Code notification | — |
-
-**Deliverables**: `src/tools/cronTools.ts`, `src/cron/cronScheduler.ts`
-**New files**: 2 | **New tools**: 6 | **Estimated lines**: ~450
-
-**After Phase 8: ~78% toward Hermes**
-> 58 tools. "Every morning at 9am, check my Vercel deployments and Slack me if anything failed." Automation changes this from a tool box to an assistant.
-
----
-
-### Phase 9: WhatsApp via Baileys
-**Goal**: Third messaging platform.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 9.1 | Baileys (WhatsApp Web multi-device) integration | — |
-| 9.2 | QR code auth flow in VS Code webview | — |
-| 9.3 | `whatsapp_send_message` — send to contact/group | `whatsapp_send_message` |
-| 9.4 | `whatsapp_read_messages` — recent messages | `whatsapp_read_messages` |
-| 9.5 | `whatsapp_list_contacts` — contacts list | `whatsapp_list_contacts` |
-| 9.6 | `whatsapp_list_groups` — groups list | `whatsapp_list_groups` |
-
-**Deliverables**: `src/tools/whatsappTools.ts`, `src/whatsapp/whatsappClient.ts`
-**New files**: 2 | **New tools**: 4 | **New dependency**: `@whiskeysockets/baileys`
-**Estimated lines**: ~500
-
-**After Phase 9: ~85% toward Hermes**
-> 62 tools. Gmail + Slack + WhatsApp = 3 messaging platforms. Hermes has 18, but these 3 cover 90% of developer communication.
-
----
-
-### Phase 10: Audit Log + Activity Dashboard
-**Goal**: Track everything the agent did across sessions.
-
-| Task | Description | New Tools |
-|------|-------------|-----------|
-| 10.1 | Append every tool call to `sessions.db` audit table | — |
-| 10.2 | `audit_search` — search action history (sent emails, created issues, etc.) | `audit_search` |
-| 10.3 | `audit_summary` — daily/weekly activity summary | `audit_summary` |
-| 10.4 | VS Code webview dashboard showing recent activity | — |
-
-**Deliverables**: `src/tools/auditTools.ts`, `src/audit/auditLog.ts`, `src/webview/dashboard.ts`
-**New files**: 3 | **New tools**: 2 | **Estimated lines**: ~400
-
-**After Phase 10: ~90% toward Hermes**
-> 64 tools. Full observability. The user can see everything Copilot did on their behalf. Trust comes from transparency.
-
----
-
-### Phase 11: Polish + Ecosystem
-**Goal**: Production readiness and discoverability.
+### Phase 10: Web Search + Audit + Dashboard
+**Goal**: Internet access, observability, and trust.
 
 | Task | Description |
 |------|-------------|
-| 11.1 | Rate limiting on all API tools (per-minute quotas) |
-| 11.2 | Exponential backoff retry logic |
-| 11.3 | Confirmation prompts for destructive operations (send email, create PR, delete event) |
-| 11.4 | Settings migration system (version upgrades) |
-| 11.5 | VS Code Marketplace publishing |
-| 11.6 | README with feature comparison vs Hermes |
-| 11.7 | Extension icon + branding |
-| 11.8 | Test suite (at least auth + memory + sessions) |
+| 10.1 | Add web search MCP (Tavily, Exa, or DuckDuckGo community server) |
+| 10.2 | Audit log in `sessions.db` — every tool call tracked |
+| 10.3 | `audit_search` + `audit_summary` tools |
+| 10.4 | VS Code webview dashboard showing recent activity |
+| 10.5 | `SessionStart` hook enrichment: show daily summary of pending items |
 
-**After Phase 11: ~95% toward Hermes**
-> Production-grade, published on Marketplace. Missing only: browser automation, RL training, voice mode, 15 more messaging platforms. Those are Hermes-specific and not needed for "Hermes for Copilot" positioning.
+**After Phase 10: ~88%**
+> Full observability. User sees everything the agent did. Web search for research. Trust through transparency.
 
 ---
 
+### Phase 11: Cron / Scheduled Tasks
+**Goal**: Automated recurring tasks.
+
+| Task | Description |
+|------|-------------|
+| 11.1 | Cron store at `~/.copilot-minimax/cron/jobs.json` |
+| 11.2 | `cron_create`, `cron_list`, `cron_update`, `cron_delete`, `cron_pause`, `cron_resume` |
+| 11.3 | Background timer via VS Code extension activation |
+| 11.4 | Deliver results via Slack/Gmail/VS Code notification (using MCP servers) |
+
+**Architecture**: VS Code Extension (needs background timer + workspace activation)
+
+**After Phase 11: ~92%**
+
+---
+
+### Phase 12: Polish + Publish
+**Goal**: Production readiness and distribution.
+
+| Task | Description |
+|------|-------------|
+| 12.1 | Rate limiting on all MCP server tools (per-minute quotas) |
+| 12.2 | Exponential backoff retry logic in MCP servers |
+| 12.3 | Plugin marketplace listing (Git repo, `plugin.json`, README) |
+| 12.4 | VS Code Marketplace publishing (extension component only) |
+| 12.5 | README with feature comparison vs Hermes |
+| 12.6 | Extension icon + branding |
+| 12.7 | Test suite expansion (memory, sessions, hooks, MCP servers) |
+| 12.8 | Settings migration system for version upgrades |
+
+**After Phase 12: ~95%**
+> Production-grade. Installable as a Copilot plugin (agents + skills + hooks + MCP servers) OR as a VS Code extension (for memory/session features). Published everywhere.
+
+---
+
+### Architecture Summary
+
+```
+copilot-minimax/
+├── plugin.json                           # Plugin manifest (bundles everything)
+├── .github/
+│   ├── agents/minimax.agent.md           # @minimax persona
+│   ├── instructions/                     # Always-on coding standards
+│   ├── prompts/                          # Reusable task templates
+│   ├── hooks/                            # 6 lifecycle hooks
+│   └── skills/                           # Bundled skill files
+├── mcp-servers/
+│   ├── google/                           # Gmail + Calendar MCP (portable)
+│   ├── aws/                              # AWS MCP (or use official)
+│   ├── vercel/                           # Vercel MCP
+│   ├── slack/                            # Slack MCP (or use community)
+│   └── whatsapp/                         # WhatsApp MCP (or use community)
+├── extension/                            # VS Code extension (memory + sessions + cron + webview)
+│   ├── src/memory/                       # ✅ Built
+│   ├── src/session/                      # Phase 7
+│   ├── src/cron/                         # Phase 11
+│   └── src/webview/                      # Phase 10
+└── .vscode/mcp.json                      # MCP server registration
+```
+
+### What stays as VS Code Extension vs what becomes MCP
+
+| Component | Architecture | Why |
+|-----------|-------------|-----|
+| Memory (add/remove/replace/list) | **VS Code Extension** | Needs filesystem + secret storage + VS Code API for snapshot injection |
+| Sessions (search/list/resume) | **VS Code Extension** | Needs `better-sqlite3` native module + filesystem |
+| Cron scheduler | **VS Code Extension** | Needs background timer + workspace activation events |
+| Webview dashboard | **VS Code Extension** | Needs VS Code webview API |
+| Gmail + Calendar | **MCP Server** | Portable — works in any editor |
+| AWS (S3/Lambda/EC2/CloudWatch) | **MCP Server** | Portable — official AWS MCP exists |
+| Vercel | **MCP Server** | Portable |
+| GitHub | **MCP Server** | Portable — official GitHub MCP exists |
+| Slack | **MCP Server** | Portable — community MCP exists |
+| WhatsApp | **MCP Server** | Portable — community MCP exists |
+| Web Search | **MCP Server** | Portable — Tavily/Exa MCP exists |
+| Agent persona | **Custom Agent** (.agent.md) | Native Copilot — just a file |
+| Coding standards | **Instructions** (.instructions.md) | Native Copilot — just a file |
+| Task templates | **Prompts** (.prompt.md) | Native Copilot — just files |
+| Skills | **Native Skills** (SKILL.md) | Copilot already has progressive loading |
+| Lifecycle hooks | **Hooks** (.json) | Native Copilot — 8 lifecycle events |
+| Distribution | **Plugin** (plugin.json) | Installable from Git URL |
+
+### Existing MCP Servers We Can Use (Zero Code)
+
+| Service | MCP Server | Status |
+|---------|-----------|--------|
+| GitHub | `github/github-mcp-server` (official) | Add to `mcp.json` |
+| AWS | `awslabs/mcp` (official) | Add to `mcp.json` |
+| Slack | `korotovsky/slack-mcp-server` (community) | Add to `mcp.json` |
+| WhatsApp Business | Wassenger WhatsApp MCP (official integration) | Add to `mcp.json` |
+| WhatsApp Personal | `lharries/whatsapp-mcp` (community) | Add to `mcp.json` |
+| Web Search (Tavily) | `tavily-ai/tavily-mcp` (official) | Add to `mcp.json` |
+| Web Search (Exa) | `exa-labs/exa-mcp-server` (official) | Add to `mcp.json` |
+| Notion | `makenotion/notion-mcp-server` (official) | Add to `mcp.json` |
+| Playwright (browser) | `microsoft/playwright-mcp` (official) | Add to `mcp.json` |
+| Linear | `jerhadf/linear-mcp-server` (community) | Add to `mcp.json` |
+| Discord | `v-3/discordmcp` (community) | Add to `mcp.json` |
+| Google Workspace | `taylorwilsdon/google_workspace_mcp` (community) | Evaluate vs custom |
+
+**Key realization**: For ~6 services, we write ZERO code. Just add them to `mcp.json` and the plugin bundles them. Our value-add is the **intelligence layer** (memory, skills, hooks, persona) — not the API wrappers.
+
 ### Summary Scorecard
 
-| Phase | New Tools | Total Tools | Lines Added | % Toward Hermes | Key Unlock |
-|-------|-----------|-------------|-------------|-----------------|------------|
-| **Current** | — | 26 | 2,033 | **0%** | Gmail + AWS + Vercel |
-| **1. Memory** | +4 | 30 | +300 | **15%** | Agent remembers across sessions |
-| **2. Sessions** | +3 | 33 | +400 | **25%** | Searchable conversation history |
-| **3. GitHub** | +9 | 42 | +500 | **38%** | Deepest-value integration |
-| **4. Web** | +2 | 44 | +300 | **45%** | Internet access |
-| **5. Slack** | +5 | 49 | +350 | **52%** | 2nd messaging platform |
-| **6. Calendar** | +5 | 54 | +350 | **60%** | Matches Hermes tool count |
-| **7. Skills** | +5 | 59 | +400 | **70%** | Self-improving agent |
-| **8. Cron** | +6 | 65 | +450 | **78%** | Automation |
-| **9. WhatsApp** | +4 | 69 | +500 | **85%** | 3rd messaging platform |
-| **10. Audit** | +2 | 71 | +400 | **90%** | Full observability |
-| **11. Polish** | — | 71 | +300 | **95%** | Production-ready |
-| **TOTAL** | **+45** | **71** | **+4,250** | **95%** | **~6,300 total lines** |
+| Phase | Key Deliverable | Architecture | % Toward Hermes |
+|-------|----------------|-------------|-----------------|
+| **1. Memory** ✅ | Memory tools (4) | VS Code Extension | **15%** |
+| **2. Plugin Scaffold** | Agent persona + instructions + prompts | Files only | **20%** |
+| **3. Hooks** | 6 lifecycle hooks | Files only | **30%** |
+| **4. Gmail + Calendar** | Google MCP server | MCP Server | **40%** |
+| **5. AWS** | AWS MCP (official or custom) | MCP Server | **48%** |
+| **6. Vercel + GitHub** | MCP servers (official GitHub) | MCP Server | **55%** |
+| **7. Sessions** | Session DB + search | VS Code Extension | **62%** |
+| **8. Skills** | Native SKILL.md + hooks | Files + Extension | **72%** |
+| **9. Slack + WhatsApp** | Messaging MCP servers | MCP Server | **80%** |
+| **10. Web + Audit** | Web search + dashboard | MCP + Extension | **88%** |
+| **11. Cron** | Scheduled tasks | VS Code Extension | **92%** |
+| **12. Polish** | Production + publish | All | **95%** |
 
-The remaining 5% is browser automation (10 tools), voice mode, RL training, and 15 niche messaging platforms — features that don't fit the "inside Copilot" model and are Hermes-specific.
+### Custom Editor Roadmap
 
-Want me to start building Phase 1 (Memory System)?
+This architecture is designed to be reused in a custom code editor:
+
+1. **MCP servers** work in any editor that supports MCP (all of them)
+2. **Agent/Skill/Hook/Instruction files** follow open standards (`.agent.md`, `SKILL.md`, agentskills.io)
+3. **The VS Code extension parts** (memory, sessions, cron) would need to be reimplemented as:
+   - A local Node.js/Python service (runs as background process)
+   - Or an MCP server itself (sessions and memory exposed via MCP tools)
+   - Or native modules in the custom editor
+
+The split is clean: **intelligence layer** (files) + **service integrations** (MCP) + **editor-specific** (extension). When building the custom editor, only the third bucket needs reimplementation.

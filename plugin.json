@@ -1,0 +1,9 @@
+{
+  "name": "copilot-minimax",
+  "displayName": "Copilot Minimax",
+  "description": "Hermes-level intelligence for GitHub Copilot — persistent memory, lifecycle hooks, MCP integrations, and a proactive agent persona that remembers, learns, and improves.",
+  "version": "0.2.0",
+  "publisher": "justbecuasez",
+  "repository": "https://github.com/justbecuasez/copilot-minimax",
+  "license": "MIT"
+}

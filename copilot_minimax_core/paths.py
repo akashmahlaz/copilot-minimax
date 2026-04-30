@@ -18,10 +18,51 @@ def extensions_dir() -> Path:
     return Path.home() / ".vscode" / "extensions"
 
 
+def _candidate_copilot_chat_dirs() -> list[Path]:
+    """Return candidate Copilot Chat extension directories.
+
+    Supports both the legacy standalone marketplace install
+    (`github.copilot-chat-*`) and the newer bundled VS Code `copilot`
+    extension layout.
+    """
+    candidates: list[Path] = []
+
+    legacy_root = extensions_dir()
+    if legacy_root.exists():
+        candidates.extend(legacy_root.glob("github.copilot-chat-*"))
+
+    if platform.system() == "Windows":
+        program_roots = [
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Microsoft VS Code Insiders",
+        ]
+        for root in program_roots:
+            if not root.exists():
+                continue
+            candidates.extend(root.glob("*\u005cresources\u005capp\u005cextensions\u005ccopilot"))
+    elif platform.system() == "Darwin":
+        candidates.extend(
+            [
+                Path("/Applications/Visual Studio Code.app/Contents/Resources/app/extensions/copilot"),
+                Path("/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/extensions/copilot"),
+            ]
+        )
+    else:
+        candidates.extend(
+            [
+                Path("/usr/share/code/resources/app/extensions/copilot"),
+                Path("/usr/share/code-insiders/resources/app/extensions/copilot"),
+                Path.home() / ".vscode-server" / "extensions" / "copilot",
+            ]
+        )
+
+    return [path for path in candidates if path.exists()]
+
+
 def find_copilot_chat_dir() -> Path | None:
     """Find the latest installed github.copilot-chat extension."""
     candidates = sorted(
-        extensions_dir().glob("github.copilot-chat-*"),
+        _candidate_copilot_chat_dirs(),
         key=lambda p: p.name,
         reverse=True,
     )

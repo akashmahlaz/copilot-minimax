@@ -88,6 +88,9 @@ function registerSessionTools(context) {
             if (!session) {
                 return textResult(`Session "${id}" not found. Use session_list to see available sessions.`);
             }
+            // Set lineage — current session is a child of the resumed one
+            (0, sessionStore_1.setParentSession)(id);
+            const lineage = session.parentId ? `\nParent session: ${session.parentId}` : '';
             const entries = session.entries.map((e, i) => {
                 const time = e.timestamp.slice(11, 16);
                 return `**${i + 1}. ${e.tool}** (${time})\n   → ${e.input.substring(0, 150)}\n   ← ${e.output.substring(0, 200)}`;
@@ -95,7 +98,7 @@ function registerSessionTools(context) {
             return textResult(`📂 **Session ${session.id}**\n` +
                 `Started: ${session.startTime.slice(0, 16).replace('T', ' ')}\n` +
                 `Ended: ${session.endTime.slice(0, 16).replace('T', ' ')}\n` +
-                `Tool calls: ${session.toolCount}\n\n` +
+                `Tool calls: ${session.toolCount}${lineage}\n\n` +
                 `---\n\n${entries.join('\n\n')}\n\n---\n\n` +
                 `This is the full context from that session. You can continue from where it left off.`);
         }

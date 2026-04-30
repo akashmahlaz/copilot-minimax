@@ -1,0 +1,144 @@
+{
+  "mcpServers": {
+    "google": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-servers/google/dist/index.js"],
+      "env": {
+        "GOOGLE_CLIENT_ID": "${input:googleClientId}",
+        "GOOGLE_CLIENT_SECRET": "${input:googleClientSecret}"
+      }
+    },
+    "sessions": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-servers/sessions/dist/index.js"]
+    },
+    "aws": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-proxy-for-aws@latest", "https://aws-mcp.${input:awsRegion}.api.aws/mcp"],
+      "env": {
+        "AWS_PROFILE": "${input:awsProfile}",
+        "AWS_REGION": "${input:awsRegion}"
+      }
+    },
+    "aws-admin": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "tool", "run", "--from",
+        "awslabs.aws-api-mcp-server@latest",
+        "awslabs.aws-api-mcp-server.exe"
+      ],
+      "env": {
+        "AWS_PROFILE": "${input:awsProfile}",
+        "AWS_REGION": "${input:awsRegion}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-iam": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "tool", "run", "--from",
+        "awslabs.iam-mcp-server@latest",
+        "awslabs.iam-mcp-server.exe"
+      ],
+      "env": {
+        "AWS_PROFILE": "${input:awsProfile}",
+        "AWS_REGION": "${input:awsRegion}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-cloudwatch": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "tool", "run", "--from",
+        "awslabs.amazon-cloudwatch-mcp-server@latest",
+        "awslabs.amazon-cloudwatch-mcp-server.exe"
+      ],
+      "env": {
+        "AWS_PROFILE": "${input:awsProfile}",
+        "AWS_REGION": "${input:awsRegion}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-cloudformation": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "tool", "run", "--from",
+        "awslabs.cloudformation-mcp-server@latest",
+        "awslabs.cloudformation-mcp-server.exe"
+      ],
+      "env": {
+        "AWS_PROFILE": "${input:awsProfile}",
+        "AWS_REGION": "${input:awsRegion}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:githubToken}"
+      }
+    },
+    "whatsapp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-servers/whatsapp/dist/index.js"]
+    },
+    "telegram": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-servers/telegram/dist/index.js"],
+      "env": {
+        "TELEGRAM_BOT_TOKEN": "${input:telegramBotToken}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "id": "googleClientId",
+      "type": "promptString",
+      "description": "Google OAuth Client ID",
+      "password": false
+    },
+    {
+      "id": "googleClientSecret",
+      "type": "promptString",
+      "description": "Google OAuth Client Secret",
+      "password": true
+    },
+    {
+      "id": "awsProfile",
+      "type": "promptString",
+      "description": "AWS profile name (default: default)",
+      "default": "default",
+      "password": false
+    },
+    {
+      "id": "awsRegion",
+      "type": "promptString",
+      "description": "AWS region (default: us-east-1)",
+      "default": "us-east-1",
+      "password": false
+    },
+    {
+      "id": "githubToken",
+      "type": "promptString",
+      "description": "GitHub Personal Access Token",
+      "password": true
+    },
+    {
+      "id": "telegramBotToken",
+      "type": "promptString",
+      "description": "Telegram Bot Token (get from @BotFather)",
+      "password": true
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -5,91 +6,176 @@ import * as os from 'os';
 // ── Types ───────────────────────────────────────────────────
 
 export interface SessionEntry {
-    timestamp: string;       // ISO timestamp
-    tool: string;            // Tool name (e.g. 'gmail_check_inbox')
-    input: string;           // Summarised input (sanitized — no tokens/secrets)
-    output: string;          // First 500 chars of output
+    timestamp: string;
+    tool: string;
+    input: string;
+    output: string;
 }
 
 export interface Session {
-    id: string;              // e.g. '2026-04-14_a3f1'
-    startTime: string;       // ISO timestamp of first entry
-    endTime: string;         // ISO timestamp of last entry
-    toolCount: number;
-    preview: string;         // First tool call summary
-    entries: SessionEntry[];
-}
-
-interface SessionIndex {
     id: string;
     startTime: string;
     endTime: string;
     toolCount: number;
     preview: string;
+    parentId: string | null;
+    entries: SessionEntry[];
+}
+
+export interface SessionMeta {
+    id: string;
+    startTime: string;
+    endTime: string;
+    toolCount: number;
+    preview: string;
+    parentId: string | null;
 }
 
 // ── Constants ───────────────────────────────────────────────
 
-const SESSIONS_DIR = path.join(os.homedir(), '.copilot-minimax', 'sessions');
-const INDEX_FILE = path.join(SESSIONS_DIR, 'index.json');
-const MAX_OUTPUT_CHARS = 500;      // Stored per entry
+const MAX_OUTPUT_CHARS = 500;
 const MAX_ENTRIES_PER_SESSION = 200;
-const MAX_SESSIONS = 500;          // Prune oldest beyond this
+const MAX_SESSIONS = 500;
 
 // ── State ───────────────────────────────────────────────────
 
+let db: Database.Database | null = null;
 let currentSessionId: string | null = null;
+
+// ── Paths (functions for testability — respects os.homedir mock) ──
+
+function dbDir(): string {
+    return path.join(os.homedir(), '.copilot-minimax');
+}
+
+function dbPath(): string {
+    return path.join(dbDir(), 'sessions.db');
+}
+
+function jsonSessionsDir(): string {
+    return path.join(dbDir(), 'sessions');
+}
+
+// ── Database ────────────────────────────────────────────────
+
+function ensureDb(): Database.Database {
+    if (db) { return db; }
+
+    const dir = dbDir();
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+
+    db = new Database(dbPath());
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            tool_count INTEGER DEFAULT 0,
+            preview TEXT DEFAULT '',
+            parent_id TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS entries (
+            rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            input TEXT DEFAULT '{}',
+            output TEXT DEFAULT '',
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS entries_fts USING fts5(
+            tool, input, output,
+            content='entries',
+            content_rowid='rowid'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS entries_ai AFTER INSERT ON entries BEGIN
+            INSERT INTO entries_fts(rowid, tool, input, output)
+            VALUES (new.rowid, new.tool, new.input, new.output);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS entries_ad AFTER DELETE ON entries BEGIN
+            INSERT INTO entries_fts(entries_fts, rowid, tool, input, output)
+            VALUES ('delete', old.rowid, old.tool, old.input, old.output);
+        END;
+
+        CREATE INDEX IF NOT EXISTS idx_entries_session ON entries(session_id);
+    `);
+
+    migrateJsonSessions();
+
+    return db;
+}
+
+// ── JSON → SQLite Migration ─────────────────────────────────
+
+function migrateJsonSessions(): void {
+    const jsonDir = jsonSessionsDir();
+    const indexFile = path.join(jsonDir, 'index.json');
+    if (!fs.existsSync(indexFile)) { return; }
+
+    try {
+        const index: Array<{
+            id: string;
+            startTime: string;
+            endTime: string;
+            toolCount: number;
+            preview: string;
+        }> = JSON.parse(fs.readFileSync(indexFile, 'utf-8'));
+
+        const d = db!;
+        const insertSession = d.prepare(
+            'INSERT OR IGNORE INTO sessions (id, start_time, end_time, tool_count, preview) VALUES (?, ?, ?, ?, ?)'
+        );
+        const insertEntry = d.prepare(
+            'INSERT INTO entries (session_id, timestamp, tool, input, output) VALUES (?, ?, ?, ?, ?)'
+        );
+
+        const migrate = d.transaction(() => {
+            for (const meta of index) {
+                const safeId = meta.id.replace(/[^a-zA-Z0-9_-]/g, '');
+                const sessFile = path.join(jsonDir, `${safeId}.json`);
+                if (!fs.existsSync(sessFile)) { continue; }
+
+                try {
+                    const session = JSON.parse(fs.readFileSync(sessFile, 'utf-8'));
+                    insertSession.run(meta.id, meta.startTime, meta.endTime, meta.toolCount, meta.preview);
+
+                    for (const entry of session.entries || []) {
+                        insertEntry.run(meta.id, entry.timestamp, entry.tool, entry.input, entry.output);
+                    }
+                } catch { /* skip corrupt session files */ }
+            }
+        });
+
+        migrate();
+
+        // Rename JSON dir so migration doesn't re-run
+        const bakDir = jsonDir + '.migrated';
+        if (!fs.existsSync(bakDir)) {
+            fs.renameSync(jsonDir, bakDir);
+        }
+    } catch { /* migration is best-effort */ }
+}
 
 // ── Helpers ─────────────────────────────────────────────────
 
-function ensureDir(): void {
-    if (!fs.existsSync(SESSIONS_DIR)) {
-        fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-    }
-}
-
 function generateId(): string {
-    const date = new Date().toISOString().slice(0, 10);  // 2026-04-14
-    const rand = Math.random().toString(36).slice(2, 6); // 4-char random
+    const date = new Date().toISOString().slice(0, 10);
+    const rand = Math.random().toString(36).slice(2, 6);
     return `${date}_${rand}`;
 }
 
-function loadIndex(): SessionIndex[] {
-    ensureDir();
-    if (!fs.existsSync(INDEX_FILE)) { return []; }
-    try {
-        return JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
-    } catch { return []; }
-}
-
-function saveIndex(index: SessionIndex[]): void {
-    ensureDir();
-    fs.writeFileSync(INDEX_FILE, JSON.stringify(index, null, 2), 'utf-8');
-}
-
-function sessionPath(id: string): string {
-    // Sanitize id to prevent path traversal
-    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '');
-    return path.join(SESSIONS_DIR, `${safe}.json`);
-}
-
-function loadSession(id: string): Session | null {
-    const p = sessionPath(id);
-    if (!fs.existsSync(p)) { return null; }
-    try {
-        return JSON.parse(fs.readFileSync(p, 'utf-8'));
-    } catch { return null; }
-}
-
-function saveSession(session: Session): void {
-    ensureDir();
-    fs.writeFileSync(sessionPath(session.id), JSON.stringify(session, null, 2), 'utf-8');
-}
-
-/** Sanitize input — remove tokens, secrets, keys */
-function sanitizeInput(input: Record<string, any> | undefined): string {
+function sanitizeInput(input: Record<string, unknown> | undefined): string {
     if (!input) { return '{}'; }
-    const clean: Record<string, any> = {};
+    const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input)) {
         const lk = k.toLowerCase();
         if (lk.includes('token') || lk.includes('secret') || lk.includes('key') || lk.includes('password')) {
@@ -103,94 +189,93 @@ function sanitizeInput(input: Record<string, any> | undefined): string {
     return JSON.stringify(clean);
 }
 
+/** Sanitize FTS5 query — quote each term to prevent operator injection. */
+function sanitizeFtsQuery(query: string): string {
+    const cleaned = query.replace(/[^\w\s@._-]/g, ' ');
+    const terms = cleaned.trim().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) { return ''; }
+    return terms.map(t => `"${t}"`).join(' ');
+}
+
 // ── Public API ──────────────────────────────────────────────
 
-/**
- * Record a tool invocation to the current session.
- * Called by every tool's textResult wrapper.
- */
-export function logToolCall(tool: string, input: Record<string, any> | undefined, output: string): void {
+export function logToolCall(tool: string, input: Record<string, unknown> | undefined, output: string): void {
     try {
-        ensureDir();
+        const d = ensureDb();
 
-        // Start new session if needed
         if (!currentSessionId) {
             currentSessionId = generateId();
         }
 
-        let session = loadSession(currentSessionId);
-        if (!session) {
-            session = {
-                id: currentSessionId,
-                startTime: new Date().toISOString(),
-                endTime: new Date().toISOString(),
-                toolCount: 0,
-                preview: '',
-                entries: [],
-            };
+        const existing = d.prepare(
+            'SELECT tool_count FROM sessions WHERE id = ?'
+        ).get(currentSessionId) as { tool_count: number } | undefined;
+
+        if (existing && existing.tool_count >= MAX_ENTRIES_PER_SESSION) { return; }
+
+        const sanitizedInput = sanitizeInput(input);
+        const truncatedOutput = output.substring(0, MAX_OUTPUT_CHARS);
+        const now = new Date().toISOString();
+
+        if (!existing) {
+            d.prepare(
+                'INSERT INTO sessions (id, start_time, end_time, tool_count, preview) VALUES (?, ?, ?, 0, ?)'
+            ).run(currentSessionId, now, now, `${tool}: ${sanitizedInput.substring(0, 100)}`);
         }
 
-        if (session.entries.length >= MAX_ENTRIES_PER_SESSION) { return; }
+        d.prepare(
+            'INSERT INTO entries (session_id, timestamp, tool, input, output) VALUES (?, ?, ?, ?, ?)'
+        ).run(currentSessionId, now, tool, sanitizedInput, truncatedOutput);
 
-        const entry: SessionEntry = {
-            timestamp: new Date().toISOString(),
-            tool,
-            input: sanitizeInput(input),
-            output: output.substring(0, MAX_OUTPUT_CHARS),
-        };
+        d.prepare(
+            'UPDATE sessions SET end_time = ?, tool_count = tool_count + 1 WHERE id = ?'
+        ).run(now, currentSessionId);
 
-        session.entries.push(entry);
-        session.endTime = entry.timestamp;
-        session.toolCount = session.entries.length;
-        if (!session.preview) {
-            session.preview = `${tool}: ${entry.input.substring(0, 100)}`;
+        // Prune oldest sessions beyond limit
+        const count = (d.prepare('SELECT COUNT(*) as cnt FROM sessions').get() as { cnt: number }).cnt;
+        if (count > MAX_SESSIONS) {
+            const excess = count - MAX_SESSIONS;
+            d.prepare(`
+                DELETE FROM entries WHERE session_id IN (
+                    SELECT id FROM sessions ORDER BY start_time ASC LIMIT ?
+                )
+            `).run(excess);
+            d.prepare(`
+                DELETE FROM sessions WHERE id IN (
+                    SELECT id FROM sessions ORDER BY start_time ASC LIMIT ?
+                )
+            `).run(excess);
         }
-
-        saveSession(session);
-
-        // Update index
-        const index = loadIndex();
-        const existing = index.findIndex(s => s.id === session!.id);
-        const meta: SessionIndex = {
-            id: session.id,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            toolCount: session.toolCount,
-            preview: session.preview,
-        };
-        if (existing >= 0) {
-            index[existing] = meta;
-        } else {
-            index.push(meta);
-        }
-
-        // Prune oldest sessions
-        if (index.length > MAX_SESSIONS) {
-            const removed = index.splice(0, index.length - MAX_SESSIONS);
-            for (const r of removed) {
-                const p = sessionPath(r.id);
-                if (fs.existsSync(p)) { fs.unlinkSync(p); }
-            }
-        }
-
-        saveIndex(index);
     } catch {
         // Logging should never break tool execution
     }
 }
 
-/**
- * List past sessions (most recent first).
- */
-export function listSessions(limit: number = 20): SessionIndex[] {
-    const index = loadIndex();
-    return index.slice(-limit).reverse();
+export function listSessions(limit: number = 20): SessionMeta[] {
+    try {
+        const d = ensureDb();
+        const rows = d.prepare(
+            'SELECT id, start_time, end_time, tool_count, preview, parent_id FROM sessions ORDER BY start_time DESC LIMIT ?'
+        ).all(limit) as Array<{
+            id: string;
+            start_time: string;
+            end_time: string;
+            tool_count: number;
+            preview: string;
+            parent_id: string | null;
+        }>;
+
+        return rows.map(r => ({
+            id: r.id,
+            startTime: r.start_time,
+            endTime: r.end_time,
+            toolCount: r.tool_count,
+            preview: r.preview,
+            parentId: r.parent_id,
+        }));
+    } catch { return []; }
 }
 
-/**
- * Search across all sessions for a keyword/phrase.
- * Returns matching entries with session context.
- */
 export function searchSessions(query: string, maxResults: number = 15): Array<{
     sessionId: string;
     sessionDate: string;
@@ -199,53 +284,89 @@ export function searchSessions(query: string, maxResults: number = 15): Array<{
     output: string;
     timestamp: string;
 }> {
-    const index = loadIndex();
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const results: Array<{
-        sessionId: string;
-        sessionDate: string;
-        tool: string;
-        input: string;
-        output: string;
-        timestamp: string;
-    }> = [];
+    try {
+        const d = ensureDb();
+        const ftsQuery = sanitizeFtsQuery(query);
+        if (!ftsQuery) { return []; }
 
-    // Search most recent sessions first
-    for (let i = index.length - 1; i >= 0 && results.length < maxResults; i--) {
-        const meta = index[i];
-        const session = loadSession(meta.id);
-        if (!session) { continue; }
+        const rows = d.prepare(`
+            SELECT e.session_id, s.start_time, e.tool, e.input, e.output, e.timestamp
+            FROM entries_fts fts
+            JOIN entries e ON e.rowid = fts.rowid
+            JOIN sessions s ON s.id = e.session_id
+            WHERE entries_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+        `).all(ftsQuery, maxResults) as Array<{
+            session_id: string;
+            start_time: string;
+            tool: string;
+            input: string;
+            output: string;
+            timestamp: string;
+        }>;
 
-        for (const entry of session.entries) {
-            if (results.length >= maxResults) { break; }
-
-            const haystack = `${entry.tool} ${entry.input} ${entry.output}`.toLowerCase();
-            if (terms.every(t => haystack.includes(t))) {
-                results.push({
-                    sessionId: session.id,
-                    sessionDate: session.startTime.slice(0, 10),
-                    tool: entry.tool,
-                    input: entry.input,
-                    output: entry.output,
-                    timestamp: entry.timestamp,
-                });
-            }
-        }
-    }
-
-    return results;
+        return rows.map(r => ({
+            sessionId: r.session_id,
+            sessionDate: r.start_time.slice(0, 10),
+            tool: r.tool,
+            input: r.input,
+            output: r.output,
+            timestamp: r.timestamp,
+        }));
+    } catch { return []; }
 }
 
-/**
- * Load full session details for resuming context.
- */
 export function getSession(id: string): Session | null {
-    return loadSession(id);
+    try {
+        const d = ensureDb();
+        const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
+
+        const row = d.prepare(
+            'SELECT id, start_time, end_time, tool_count, preview, parent_id FROM sessions WHERE id = ?'
+        ).get(safeId) as {
+            id: string;
+            start_time: string;
+            end_time: string;
+            tool_count: number;
+            preview: string;
+            parent_id: string | null;
+        } | undefined;
+
+        if (!row) { return null; }
+
+        const entries = d.prepare(
+            'SELECT timestamp, tool, input, output FROM entries WHERE session_id = ? ORDER BY rowid ASC'
+        ).all(safeId) as SessionEntry[];
+
+        return {
+            id: row.id,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            toolCount: row.tool_count,
+            preview: row.preview,
+            parentId: row.parent_id,
+            entries,
+        };
+    } catch { return null; }
 }
 
-/**
- * Get current session ID (for reference).
- */
 export function getCurrentSessionId(): string | null {
     return currentSessionId;
+}
+
+export function setParentSession(parentId: string): void {
+    if (!currentSessionId) { return; }
+    try {
+        const d = ensureDb();
+        d.prepare('UPDATE sessions SET parent_id = ? WHERE id = ?').run(parentId, currentSessionId);
+    } catch { /* best effort */ }
+}
+
+export function closeDb(): void {
+    if (db) {
+        db.close();
+        db = null;
+    }
+    currentSessionId = null;
 }

@@ -10,28 +10,19 @@ export interface Session {
     endTime: string;
     toolCount: number;
     preview: string;
+    parentId: string | null;
     entries: SessionEntry[];
 }
-interface SessionIndex {
+export interface SessionMeta {
     id: string;
     startTime: string;
     endTime: string;
     toolCount: number;
     preview: string;
+    parentId: string | null;
 }
-/**
- * Record a tool invocation to the current session.
- * Called by every tool's textResult wrapper.
- */
-export declare function logToolCall(tool: string, input: Record<string, any> | undefined, output: string): void;
-/**
- * List past sessions (most recent first).
- */
-export declare function listSessions(limit?: number): SessionIndex[];
-/**
- * Search across all sessions for a keyword/phrase.
- * Returns matching entries with session context.
- */
+export declare function logToolCall(tool: string, input: Record<string, unknown> | undefined, output: string): void;
+export declare function listSessions(limit?: number): SessionMeta[];
 export declare function searchSessions(query: string, maxResults?: number): Array<{
     sessionId: string;
     sessionDate: string;
@@ -40,13 +31,8 @@ export declare function searchSessions(query: string, maxResults?: number): Arra
     output: string;
     timestamp: string;
 }>;
-/**
- * Load full session details for resuming context.
- */
 export declare function getSession(id: string): Session | null;
-/**
- * Get current session ID (for reference).
- */
 export declare function getCurrentSessionId(): string | null;
-export {};
+export declare function setParentSession(parentId: string): void;
+export declare function closeDb(): void;
 //# sourceMappingURL=sessionStore.d.ts.map
