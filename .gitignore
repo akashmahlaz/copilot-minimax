@@ -25,3 +25,6 @@ extension/out/chat/whatsappParticipant.*
 # Hook state
 .tool-counter
 
+# Local auth tokens
+tools/.gmail_token.json
+
