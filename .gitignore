@@ -27,4 +27,5 @@ extension/out/chat/whatsappParticipant.*
 
 # Local auth tokens
 tools/.gmail_token.json
+hermes-agent 
 

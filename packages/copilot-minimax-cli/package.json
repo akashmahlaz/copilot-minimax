@@ -1,0 +1,41 @@
+{
+  "name": "copilot-minimax",
+  "version": "0.1.0",
+  "description": "Patch VS Code Copilot Chat to use the MiniMax Anthropic-compatible API.",
+  "license": "MIT",
+  "type": "module",
+  "homepage": "https://github.com/akashmahlaz/copilot-minimax#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akashmahlaz/copilot-minimax.git",
+    "directory": "packages/copilot-minimax-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/akashmahlaz/copilot-minimax/issues"
+  },
+  "bin": {
+    "copilot-minimax": "./bin/copilot-minimax.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "pack:dry-run": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "copilot",
+    "vscode",
+    "minimax",
+    "anthropic",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

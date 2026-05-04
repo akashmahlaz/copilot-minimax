@@ -60,10 +60,13 @@ def _candidate_copilot_chat_dirs() -> list[Path]:
 
 
 def find_copilot_chat_dir() -> Path | None:
-    """Find the latest installed github.copilot-chat extension."""
+    """Find the newest installed Copilot Chat extension candidate."""
     candidates = sorted(
         _candidate_copilot_chat_dirs(),
-        key=lambda p: p.name,
+        key=lambda p: (
+            extension_js_path(p).stat().st_mtime if extension_js_path(p).exists() else 0,
+            p.name,
+        ),
         reverse=True,
     )
     return candidates[0] if candidates else None

@@ -24,7 +24,7 @@ so you can layer more Copilot extension modifications on top of the MiniMax patc
 
 ## Project Structure
 
-The repository is now modular for easier maintenance and future connector work:
+The repository is split into a stable patching core, publishable CLIs, and optional connector experiments so contributors can work in one area without learning the whole codebase:
 
 - `copilot_minimax_core/cli.py` - argument parsing and command routing
 - `copilot_minimax_core/commands.py` - patch/status/restore command handlers
@@ -33,6 +33,7 @@ The repository is now modular for easier maintenance and future connector work:
 - `copilot_minimax_core/paths.py` - OS-specific VS Code path resolution
 - `copilot_minimax_core/settings_ops.py` - optional settings integration
 - `copilot_minimax.py` - compatibility wrapper (`python copilot_minimax.py ...` still works)
+- `packages/copilot-minimax-cli/` - dependency-free npm CLI for `npx copilot-minimax ...`
 - `patches/` - provider-specific patch pack templates (start with Gmail)
 
 For UX direction of future Gmail/Vercel/WhatsApp connector surfaces, see
@@ -46,6 +47,27 @@ Connector runtime setup is documented in `docs/connector-bridge.md`.
 
 ## Install
 
+### Recommended: npx
+
+After publishing to npm, users can patch VS Code without cloning this repo:
+
+```bash
+npx copilot-minimax status
+npx copilot-minimax patch --key YOUR_MINIMAX_API_KEY
+npx copilot-minimax restore
+```
+
+Local package development:
+
+```bash
+cd packages/copilot-minimax-cli
+npm test
+npm pack --dry-run
+npm publish --access public
+```
+
+### Python compatibility CLI
+
 ```bash
 # No dependencies needed — pure Python 3.9+
 git clone https://github.com/akashmahlaz/copilot-minimax.git
@@ -53,6 +75,24 @@ cd copilot-minimax
 ```
 
 ## Usage
+
+### npx CLI
+
+```bash
+# Check current status
+npx copilot-minimax status
+
+# Apply the patch
+npx copilot-minimax patch
+
+# Apply and also configure Claude Code env vars with your API key
+npx copilot-minimax patch --key YOUR_MINIMAX_API_KEY
+
+# Restore original (undo all patches)
+npx copilot-minimax restore
+```
+
+### Python CLI
 
 ```bash
 # Check current status
@@ -177,8 +217,8 @@ because the wrapper file did not exist yet or the terminal cwd was not the repo 
 
 ## Notes
 
-- **No external dependencies** — uses only Python standard library
-- The patch targets `github.copilot-chat-*` extension in `~/.vscode/extensions/`
+- **No runtime dependencies** — the Python CLI uses only the standard library, and the npm CLI uses only Node built-ins
+- The patch targets both legacy `github.copilot-chat-*` installs in `~/.vscode/extensions/` and bundled VS Code Copilot installs in `resources/app/extensions/copilot`
 - If VS Code auto-updates the Copilot Chat extension, **re-run the patch**
 - Backup is stored as `extension.js.copilot-minimax.bak` next to the original
 
